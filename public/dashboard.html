@@ -46,7 +46,7 @@ function renderForbidden() {
     <div class="login-prompt">
       <img src="https://media.discordapp.net/attachments/1529062834250715182/1529396105702539414/icon-1.png" alt="Jump Up Events">
       <h1>Access Denied</h1>
-      <p>You need Administrator permissions in the Jump Up Events server to access this panel.</p>
+      <p>You need the admin role in the Jump Up Events server to access this panel.</p>
       <a href="/auth/logout" class="btn btn-danger">Log Out</a>
     </div>
   `;
@@ -106,7 +106,8 @@ function renderDashboard(me) {
       <div id="tab-modmail" class="tab-content">
         <div class="card">
           <h2>Active Tickets</h2>
-          <div id="ticket-list"><p style="color:#9d9daf">Ticket system active in Discord.</p></div>
+          <div id="ticket-list"><p style="color:#9d9daf">Click refresh to load tickets.</p></div>
+          <button class="btn btn-small btn-primary" style="margin-top:12px" onclick="loadTickets()">Refresh</button>
         </div>
       </div>
 
@@ -139,6 +140,7 @@ function renderDashboard(me) {
       document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
       document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+      if (tab.dataset.tab === 'modmail') loadTickets();
     });
   });
 
@@ -218,6 +220,52 @@ async function lookupUser() {
   el.innerHTML = `<div class="table-wrap"><table><thead><tr>
     <th>#</th><th>Date</th><th>Reason</th>
   </tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+async function loadTickets() {
+  const data = await fetchAPI('/api/tickets');
+  if (!data) return;
+  const el = document.getElementById('ticket-list');
+  if (data.length === 0) {
+    el.innerHTML = '<p style="color:#9d9daf">No active tickets.</p>';
+    return;
+  }
+  const rows = data.map(t => `
+    <div class="ticket-item">
+      <div class="ticket-info">
+        <strong>User:</strong> ${t.userId} &middot; <strong>Mode:</strong> ${t.mode}
+      </div>
+      <div class="ticket-actions">
+        <input type="text" id="reply-${t.userId}" placeholder="Type a reply..." style="flex:1;padding:6px;border-radius:4px;border:1px solid #3b3d4a;background:#1e1f2b;color:#fff">
+        <button class="btn btn-small btn-primary" onclick="replyToTicket('${t.userId}')">Reply</button>
+        <button class="btn btn-small btn-danger" onclick="closeTicket('${t.userId}')">Close</button>
+      </div>
+    </div>
+  `).join('');
+  el.innerHTML = `<div class="ticket-list">${rows}</div>`;
+}
+
+async function replyToTicket(userId) {
+  const input = document.getElementById('reply-' + userId);
+  const message = input.value.trim();
+  if (!message) return;
+  const res = await fetch(API + '/api/tickets/' + userId + '/reply', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message }),
+  });
+  if (res.ok) {
+    input.value = '';
+    loadTickets();
+  }
+}
+
+async function closeTicket(userId) {
+  if (!confirm('Close this ticket?')) return;
+  const res = await fetch(API + '/api/tickets/' + userId + '/close', {
+    method: 'POST',
+  });
+  if (res.ok) loadTickets();
 }
 
 init();
