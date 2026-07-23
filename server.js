@@ -3,6 +3,7 @@ const session = require('express-session');
 const passport = require('passport');
 const DiscordStrategy = require('passport-discord').Strategy;
 const path = require('path');
+const configFile = require('./config.json');
 const config = {};
 
 for (const [key, value] of Object.entries(configFile)) {
