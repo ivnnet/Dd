@@ -1,8 +1,10 @@
 const { ChannelType, PermissionsBitField } = require('discord.js');
 
 const activeTickets = new Map();
+let botClient = null;
 
 async function createTicket(user, guild, client) {
+  botClient = client;
   if (activeTickets.has(user.id)) {
     const existing = activeTickets.get(user.id);
     const channel = guild.channels.cache.get(existing.channelId);
@@ -84,6 +86,45 @@ async function closeTicket(userId, guild, client) {
   return true;
 }
 
+function getAllTickets() {
+  const tickets = [];
+  for (const [userId, ticket] of activeTickets) {
+    tickets.push({
+      userId,
+      channelId: ticket.channelId,
+      mode: ticket.mode,
+    });
+  }
+  return tickets;
+}
+
+async function replyToTicket(userId, message, staffName) {
+  const ticket = activeTickets.get(userId);
+  if (!ticket || !botClient) return false;
+
+  const channel = botClient.channels.cache.get(ticket.channelId);
+  if (!channel) return false;
+
+  await channel.send(`**${staffName}:** ${message}`);
+  return true;
+}
+
+async function closeTicketFromDashboard(userId) {
+  const ticket = activeTickets.get(userId);
+  if (!ticket || !botClient) return false;
+
+  const channel = botClient.channels.cache.get(ticket.channelId);
+  if (channel) {
+    await channel.send('This ticket is now closed. The channel will be deleted shortly.');
+    setTimeout(async () => {
+      try { await channel.delete(); } catch {}
+    }, 5000);
+  }
+
+  activeTickets.delete(userId);
+  return true;
+}
+
 function getActiveTicket(userId) {
   return activeTickets.get(userId);
 }
@@ -103,4 +144,4 @@ function getTicketByChannel(channelId) {
   return null;
 }
 
-module.exports = { createTicket, closeTicket, getActiveTicket, setActiveTicket, deleteActiveTicket, getTicketByChannel };
+module.exports = { createTicket, closeTicket, getActiveTicket, setActiveTicket, deleteActiveTicket, getTicketByChannel, getAllTickets, replyToTicket, closeTicketFromDashboard };
