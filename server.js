@@ -3,17 +3,7 @@ const session = require('express-session');
 const passport = require('passport');
 const DiscordStrategy = require('passport-discord').Strategy;
 const path = require('path');
-const configFile = require('./config.json');
-
-const config = {};
-
-for (const [key, value] of Object.entries(configFile)) {
-  if (typeof value === "string" && value.startsWith("ENV:")) {
-    config[key] = process.env[value.replace("ENV:", "")];
-  } else {
-    config[key] = value;
-  }
-};
+const config = require('./config');
 
 const app = express();
 
@@ -61,7 +51,6 @@ async function isAdmin(req, res, next) {
   }
 }
 
-
 app.get('/auth/discord', passport.authenticate('discord'));
 
 app.get('/auth/callback',
@@ -107,10 +96,31 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
 });
 
+app.get('/api/tickets', isAuthenticated, isAdmin, (req, res) => {
+  const modmail = require('./handlers/modmail');
+  res.json(modmail.getAllTickets());
+});
+
+app.post('/api/tickets/:userId/reply', isAuthenticated, isAdmin, async (req, res) => {
+  const { message } = req.body;
+  if (!message) return res.status(400).json({ error: 'Message is required.' });
+  const modmail = require('./handlers/modmail');
+  const success = await modmail.replyToTicket(req.params.userId, message, req.user.username);
+  if (!success) return res.status(404).json({ error: 'No active ticket found.' });
+  res.json({ success: true });
+});
+
+app.post('/api/tickets/:userId/close', isAuthenticated, isAdmin, async (req, res) => {
+  const modmail = require('./handlers/modmail');
+  const success = await modmail.closeTicketFromDashboard(req.params.userId);
+  if (!success) return res.status(404).json({ error: 'No active ticket found.' });
+  res.json({ success: true });
+});
+
 app.get('/LICENSE', (req, res) => {
   res.sendFile(path.join(__dirname, 'LICENSE'));
 });
 
-app.listen(config.dashboardPort, () => {
+app.listen(config.port, () => {
   console.log(`Dashboard running on ${config.dashboardUrl}`);
 });
