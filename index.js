@@ -1,7 +1,16 @@
 const { Client, GatewayIntentBits, Partials, Collection } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
-const config = require('./config');
+const config = {};
+
+for (const [key, value] of Object.entries(configFile)) {
+  if (typeof value === "string" && value.startsWith("ENV:")) {
+    config[key] = process.env[value.replace("ENV:", "")];
+  } else {
+    config[key] = value;
+  }
+};
+
 
 const client = new Client({
   intents: [
