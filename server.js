@@ -3,7 +3,17 @@ const session = require('express-session');
 const passport = require('passport');
 const DiscordStrategy = require('passport-discord').Strategy;
 const path = require('path');
-const config = require('./config.json');
+const configFile = require('./config.json');
+
+const config = {};
+
+for (const [key, value] of Object.entries(configFile)) {
+  if (typeof value === "string" && value.startsWith("ENV:")) {
+    config[key] = process.env[value.replace("ENV:", "")];
+  } else {
+    config[key] = value;
+  }
+};
 
 const app = express();
 
