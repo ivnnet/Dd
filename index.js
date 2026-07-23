@@ -1,6 +1,9 @@
 const { Client, GatewayIntentBits, Partials, Collection } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
+
+const configFile = require('./config.json');
+
 const config = {};
 
 for (const [key, value] of Object.entries(configFile)) {
