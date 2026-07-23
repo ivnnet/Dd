@@ -54,14 +54,13 @@ async function isAdmin(req, res, next) {
       headers: { Authorization: `Bot ${config.token}` },
     });
     const data = await member.json();
-    const perms = BigInt(data.permissions || '0');
-    const adminPerm = BigInt(8);
-    if ((perms & adminPerm) === adminPerm) return next();
-    return res.status(403).send('You need Administrator permissions in the server to access this panel.');
+    if (data.roles && data.roles.includes(config.adminRoleId)) return next();
+    return res.status(403).send('You need the admin role to access this panel.');
   } catch {
     return res.status(403).send('Could not verify admin status.');
   }
 }
+
 
 app.get('/auth/discord', passport.authenticate('discord'));
 
