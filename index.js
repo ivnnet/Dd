@@ -1,16 +1,7 @@
 const { Client, GatewayIntentBits, Partials, Collection } = require('discord.js');
 const fs = require('fs');
-const configFile = require('./config.json');
-
-const config = {};
-
-for (const [key, value] of Object.entries(configFile)) {
-  if (typeof value === "string" && value.startsWith("ENV:")) {
-    config[key] = process.env[value.replace("ENV:", "")];
-  } else {
-    config[key] = value;
-  }
-}
+const path = require('path');
+const config = require('./config');
 
 const client = new Client({
   intents: [
@@ -29,20 +20,15 @@ client.commands = new Collection();
 client.config = config;
 client.strikes = require('./handlers/strikes');
 
-require('./handlers/gemini').init(config.geminiApiKey);
-
 const commandFiles = fs.readdirSync('./commands').filter(f => f.endsWith('.js'));
-
 for (const file of commandFiles) {
   const cmd = require(`./commands/${file}`);
   client.commands.set(cmd.data.name, cmd);
 }
 
 const eventFiles = fs.readdirSync('./events').filter(f => f.endsWith('.js'));
-
 for (const file of eventFiles) {
   const event = require(`./events/${file}`);
-
   if (event.once) {
     client.once(event.name, (...args) => event.execute(...args, client));
   } else {
@@ -50,15 +36,13 @@ for (const file of eventFiles) {
   }
 }
 
-client.login(config.token)
-  .then(() => {
-    console.log(`Bot logged in as ${client.user.tag}`);
-
-    // Start dashboard/server after bot is online
-    require('./server');
-  })
-  .catch(err => {
-    console.error('Bot login failed:', err);
-  });
+client.login(config.token);
 
 module.exports = client;
+
+if (config.token && config.token !== 'YOUR_BOT_TOKEN') {
+  require('./server');
+} else {
+  console.log('No bot token configured — dashboard only mode');
+  require('./server');
+}
