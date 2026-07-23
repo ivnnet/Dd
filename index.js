@@ -12,6 +12,7 @@ for (const [key, value] of Object.entries(configFile)) {
 };
 
 
+
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
