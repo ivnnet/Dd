@@ -1,4 +1,3 @@
-require('dotenv').config();
 const { REST, Routes, SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 const configRaw = require('./config.json');
 const config = {};
