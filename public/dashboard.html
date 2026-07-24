@@ -109,6 +109,16 @@ function renderDashboard(me) {
           <div id="ticket-list"><p style="color:#9d9daf">Click refresh to load tickets.</p></div>
           <button class="btn btn-small btn-primary" style="margin-top:12px" onclick="loadTickets()">Refresh</button>
         </div>
+        <div id="modmail-conversation" class="card" style="display:none;margin-top:16px">
+          <h2 id="conversation-header">Conversation</h2>
+          <button class="btn btn-small btn-secondary" onclick="closeConversation()" style="margin-bottom:12px">Back to tickets</button>
+          <div id="conversation-messages" class="modmail-messages"></div>
+          <div class="modmail-input">
+            <input type="text" id="conversation-reply-input" placeholder="Type your reply..." onkeydown="if(event.key==='Enter')sendConversationReply()">
+            <button class="btn btn-primary" onclick="sendConversationReply()">Send</button>
+            <button class="btn btn-danger" onclick="confirmConversationClose()">Close Ticket</button>
+          </div>
+        </div>
       </div>
 
       <div id="tab-actions" class="tab-content">
@@ -231,41 +241,79 @@ async function loadTickets() {
     return;
   }
   const rows = data.map(t => `
-    <div class="ticket-item">
+    <div class="ticket-item" style="cursor:pointer" onclick="openConversation('${t.userId}')">
       <div class="ticket-info">
         <strong>User:</strong> ${t.userId} &middot; <strong>Mode:</strong> ${t.mode}
-      </div>
-      <div class="ticket-actions">
-        <input type="text" id="reply-${t.userId}" placeholder="Type a reply..." style="flex:1;padding:6px;border-radius:4px;border:1px solid #3b3d4a;background:#1e1f2b;color:#fff">
-        <button class="btn btn-small btn-primary" onclick="replyToTicket('${t.userId}')">Reply</button>
-        <button class="btn btn-small btn-danger" onclick="closeTicket('${t.userId}')">Close</button>
       </div>
     </div>
   `).join('');
   el.innerHTML = `<div class="ticket-list">${rows}</div>`;
 }
 
-async function replyToTicket(userId) {
-  const input = document.getElementById('reply-' + userId);
+let activeConversationUserId = null;
+
+async function openConversation(userId) {
+  activeConversationUserId = userId;
+  document.getElementById('modmail-conversation').style.display = 'block';
+  document.getElementById('conversation-header').textContent = 'Conversation — ' + userId;
+  await loadConversationMessages();
+}
+
+function closeConversation() {
+  activeConversationUserId = null;
+  document.getElementById('modmail-conversation').style.display = 'none';
+}
+
+async function loadConversationMessages() {
+  if (!activeConversationUserId) return;
+  const data = await fetchAPI('/api/tickets/' + activeConversationUserId + '/messages');
+  if (!data) {
+    document.getElementById('conversation-messages').innerHTML = '<p style="color:#9d9daf">Could not load messages.</p>';
+    return;
+  }
+  const msgs = data.map(m => {
+    if (m.isBot) return `<div class="msg msg-system"><div class="msg-text" style="text-align:center;color:#9d9daf;font-style:italic">${escapeHtml(m.content)}</div></div>`;
+    return `
+    <div class="msg ${m.isStaff ? 'msg-staff' : 'msg-user'}">
+      <div class="msg-header">${m.author} &middot; ${new Date(m.timestamp).toLocaleString()}</div>
+      <div class="msg-text">${escapeHtml(m.content)}</div>
+    </div>`;
+  }).join('');
+  document.getElementById('conversation-messages').innerHTML = msgs;
+  const el = document.getElementById('conversation-messages');
+  el.scrollTop = el.scrollHeight;
+}
+
+async function sendConversationReply() {
+  const input = document.getElementById('conversation-reply-input');
   const message = input.value.trim();
-  if (!message) return;
-  const res = await fetch(API + '/api/tickets/' + userId + '/reply', {
+  if (!message || !activeConversationUserId) return;
+  const res = await fetch(API + '/api/tickets/' + activeConversationUserId + '/reply', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ message }),
   });
   if (res.ok) {
     input.value = '';
+    await loadConversationMessages();
     loadTickets();
   }
 }
 
-async function closeTicket(userId) {
+async function confirmConversationClose() {
   if (!confirm('Close this ticket?')) return;
-  const res = await fetch(API + '/api/tickets/' + userId + '/close', {
-    method: 'POST',
-  });
-  if (res.ok) loadTickets();
+  if (!activeConversationUserId) return;
+  const res = await fetch(API + '/api/tickets/' + activeConversationUserId + '/close', { method: 'POST' });
+  if (res.ok) {
+    closeConversation();
+    loadTickets();
+  }
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
 }
 
 init();

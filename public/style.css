@@ -74,6 +74,15 @@ body {
   background: #c03537;
 }
 
+.btn-secondary {
+  background: #3b3d4a;
+  color: #e1e1e6;
+}
+
+.btn-secondary:hover {
+  background: #4e5060;
+}
+
 .btn-small {
   padding: 4px 12px;
   font-size: 12px;
@@ -320,6 +329,11 @@ tr:hover td {
   background: #1e2a3a;
   border: 1px solid #3a4a5a;
   margin-left: auto;
+}
+
+.msg-system {
+  text-align: center;
+  margin: 8px 0;
 }
 
 .msg-header {

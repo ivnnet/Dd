@@ -1,10 +1,28 @@
-const { ChannelType, PermissionsBitField } = require('discord.js');
+const { ChannelType, PermissionsBitField, EmbedBuilder } = require('discord.js');
 
 const activeTickets = new Map();
 let botClient = null;
 
 async function createTicket(user, guild, client) {
   botClient = client;
+
+  const categoryId = client.config.modmailCategoryId;
+  const category = guild.channels.cache.get(categoryId);
+  if (!category) {
+    await user.send('Support is currently unavailable. Please try again later.');
+    return;
+  }
+
+  const expectedName = `ticket-${user.username.toLowerCase().replace(/[^a-z0-9]/g, '')}`;
+
+  // Check for existing ticket channel in the category
+  const existingChannel = category.children.cache.find(c => c.name === expectedName && c.type === ChannelType.GuildText);
+  if (existingChannel) {
+    activeTickets.set(user.id, { channelId: existingChannel.id, userId: user.id, mode: 'ai', history: [] });
+    await user.send('You already have an open ticket! Please continue in your existing channel.');
+    return;
+  }
+
   if (activeTickets.has(user.id)) {
     const existing = activeTickets.get(user.id);
     const channel = guild.channels.cache.get(existing.channelId);
@@ -13,13 +31,6 @@ async function createTicket(user, guild, client) {
       return;
     }
     activeTickets.delete(user.id);
-  }
-
-  const categoryId = client.config.modmailCategoryId;
-  const category = guild.channels.cache.get(categoryId);
-  if (!category) {
-    await user.send('Support is currently unavailable. Please try again later.');
-    return;
   }
 
   const channel = await guild.channels.create({
@@ -89,6 +100,7 @@ async function closeTicket(userId, guild, client) {
 function getAllTickets() {
   const tickets = [];
   for (const [userId, ticket] of activeTickets) {
+    if (!userId) continue;
     tickets.push({
       userId,
       channelId: ticket.channelId,
@@ -106,6 +118,20 @@ async function replyToTicket(userId, message, staffName) {
   if (!channel) return false;
 
   await channel.send(`**${staffName}:** ${message}`);
+
+  // Forward reply to user's DM
+  try {
+    const user = await botClient.users.fetch(userId);
+    await user.send({ embeds: [new EmbedBuilder()
+      .setColor(0x2ecc71)
+      .setAuthor({ name: `Staff: ${staffName}` })
+      .setDescription(message)
+      .setTimestamp()
+    ]});
+  } catch {
+    // DMs closed
+  }
+
   return true;
 }
 
@@ -144,4 +170,18 @@ function getTicketByChannel(channelId) {
   return null;
 }
 
-module.exports = { createTicket, closeTicket, getActiveTicket, setActiveTicket, deleteActiveTicket, getTicketByChannel, getAllTickets, replyToTicket, closeTicketFromDashboard };
+function rebuildActiveTickets(guild, client, categoryId) {
+  const category = guild.channels.cache.get(categoryId);
+  if (!category) return;
+  for (const channel of category.children.cache.values()) {
+    if (channel.type !== ChannelType.GuildText || !channel.name.startsWith('ticket-')) continue;
+    const existing = getTicketByChannel(channel.id);
+    if (existing) continue;
+    const username = channel.name.replace('ticket-', '');
+    const member = guild.members.cache.find(m => m.user.username.toLowerCase().replace(/[^a-z0-9]/g, '') === username);
+    const userId = member ? member.id : null;
+    activeTickets.set(userId, { channelId: channel.id, userId, mode: 'ai', history: [] });
+  }
+}
+
+module.exports = { createTicket, closeTicket, getActiveTicket, setActiveTicket, deleteActiveTicket, getTicketByChannel, getAllTickets, replyToTicket, closeTicketFromDashboard, rebuildActiveTickets };

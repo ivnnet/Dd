@@ -4,6 +4,7 @@ const passport = require('passport');
 const DiscordStrategy = require('passport-discord').Strategy;
 const path = require('path');
 const configFile = require('./config.json');
+const client = require('./index');
 const config = {};
 
 for (const [key, value] of Object.entries(configFile)) {
@@ -125,6 +126,29 @@ app.post('/api/tickets/:userId/close', isAuthenticated, isAdmin, async (req, res
   const success = await modmail.closeTicketFromDashboard(req.params.userId);
   if (!success) return res.status(404).json({ error: 'No active ticket found.' });
   res.json({ success: true });
+});
+
+app.get('/api/tickets/:userId/messages', isAuthenticated, isAdmin, async (req, res) => {
+  const modmail = require('./handlers/modmail');
+  const ticket = modmail.getActiveTicket(req.params.userId);
+  if (!ticket) return res.status(404).json({ error: 'No active ticket found.' });
+  try {
+    const channel = client.channels.cache.get(ticket.channelId);
+    if (!channel) return res.status(404).json({ error: 'Ticket channel not found.' });
+    const messages = await channel.messages.fetch({ limit: 100 });
+    const formatted = [...messages.values()].reverse().map(m => ({
+      id: m.author.bot ? 'system' : m.id,
+      author: m.author.bot ? 'System' : m.author.tag,
+      authorId: m.author.id,
+      content: m.content,
+      timestamp: m.createdTimestamp,
+      isStaff: !m.author.bot && m.author.id !== req.params.userId,
+      isBot: m.author.bot,
+    }));
+    res.json(formatted);
+  } catch {
+    res.status(500).json({ error: 'Failed to fetch messages.' });
+  }
 });
 
 app.get('/LICENSE', (req, res) => {
