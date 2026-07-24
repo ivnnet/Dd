@@ -59,14 +59,59 @@ function isAuthenticated(req, res, next) {
 
 async function isAdmin(req, res, next) {
   if (!req.user) return res.redirect('/auth/discord');
+
   try {
+    const channelId = '1529409393584504983';
+
+    const channel = await discordApi(`/channels/${channelId}`);
     const member = await discordApi(`/guilds/${config.guildId}/members/${req.user.id}`);
-    const perms = BigInt(member.permissions || '0');
-    const adminPerm = BigInt(8);
-    if ((perms & adminPerm) === adminPerm) return next();
-    return res.status(403).send('You need Administrator permissions in the server to access this panel.');
-  } catch {
-    return res.status(403).send('Could not verify admin status.');
+
+    const roles = await discordApi(`/guilds/${config.guildId}/roles`);
+
+    let permissions = BigInt(0);
+
+    // Base @everyone permissions
+    const everyoneRole = roles.find(r => r.id === config.guildId);
+    if (everyoneRole) {
+      permissions |= BigInt(everyoneRole.permissions);
+    }
+
+    // User role permissions
+    for (const roleId of member.roles) {
+      const role = roles.find(r => r.id === roleId);
+      if (role) {
+        permissions |= BigInt(role.permissions);
+      }
+    }
+
+    // Administrator bypass
+    if ((permissions & BigInt(8)) === BigInt(8)) {
+      return next();
+    }
+
+    // Apply channel overwrites
+    for (const overwrite of channel.permission_overwrites || []) {
+      if (
+        overwrite.id === req.user.id ||
+        member.roles.includes(overwrite.id)
+      ) {
+        permissions &= ~BigInt(overwrite.deny || '0');
+        permissions |= BigInt(overwrite.allow || '0');
+      }
+    }
+
+    // View Channel permission
+    const viewChannel = BigInt(0x400);
+
+    if ((permissions & viewChannel) === viewChannel) {
+      return next();
+    }
+
+    return res.status(403).send('You cannot view the required channel.');
+
+  } catch (err) {
+    console.error(err);
+    return res.status(403).send('Could not verify channel permissions.');
   }
 }
 
