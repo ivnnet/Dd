@@ -1,20 +1,17 @@
+require('dotenv').config();
 const { Client, GatewayIntentBits, Partials, Collection } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
 
-const configFile = require('./config.json');
-
+const configRaw = require('./config.json');
 const config = {};
-
-for (const [key, value] of Object.entries(configFile)) {
-  if (typeof value === "string" && value.startsWith("ENV:")) {
-    config[key] = process.env[value.replace("ENV:", "")];
+for (const [key, value] of Object.entries(configRaw)) {
+  if (typeof value === 'string' && value.startsWith('ENV:')) {
+    config[key] = process.env[value.replace('ENV:', '')];
   } else {
     config[key] = value;
   }
-};
-
-
+}
 
 const client = new Client({
   intents: [
@@ -32,6 +29,7 @@ const client = new Client({
 client.commands = new Collection();
 client.config = config;
 client.strikes = require('./handlers/strikes');
+require('./handlers/groq').init();
 
 const commandFiles = fs.readdirSync('./commands').filter(f => f.endsWith('.js'));
 for (const file of commandFiles) {
@@ -52,10 +50,3 @@ for (const file of eventFiles) {
 client.login(config.token);
 
 module.exports = client;
-
-if (config.token && config.token !== 'YOUR_BOT_TOKEN') {
-  require('./server');
-} else {
-  console.log('No bot token configured — dashboard only mode');
-  require('./server');
-}

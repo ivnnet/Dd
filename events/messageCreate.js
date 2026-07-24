@@ -1,5 +1,6 @@
-const { EmbedBuilder } = require('discord.js');
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { createTicket, getActiveTicket, setActiveTicket, getTicketByChannel } = require('../handlers/modmail');
+const groq = require('../handlers/groq');
 
 module.exports = {
   name: 'messageCreate',
@@ -29,6 +30,33 @@ module.exports = {
         .setTimestamp();
 
       await channel.send({ embeds: [embed] });
+
+      if (ticket.mode === 'ai' && groq.isReady()) {
+        const aiReply = await groq.getAutoResponse(message.content, ticket.history);
+
+        if (aiReply) {
+          ticket.history.push({ role: 'user', text: message.content });
+          ticket.history.push({ role: 'assistant', text: aiReply });
+          setActiveTicket(message.author.id, ticket);
+
+          const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+              .setCustomId(`escalate_${message.author.id}`)
+              .setLabel('Talk to a Staff Member')
+              .setStyle(ButtonStyle.Primary)
+              .setEmoji('👤')
+          );
+
+          const aiEmbed = new EmbedBuilder()
+            .setColor(0x9b59b6)
+            .setAuthor({ name: 'Jump Up Events AI Assistant', iconURL: client.user.displayAvatarURL() })
+            .setDescription(aiReply)
+            .setFooter({ text: 'AI-powered response' })
+            .setTimestamp();
+
+          await message.author.send({ embeds: [aiEmbed], components: [row] });
+        }
+      }
 
       return;
     }

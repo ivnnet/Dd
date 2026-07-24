@@ -1,15 +1,14 @@
+require('dotenv').config();
 const { REST, Routes, SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
-const configFile = require('./config.json');
-
+const configRaw = require('./config.json');
 const config = {};
-
-for (const [key, value] of Object.entries(configFile)) {
-  if (typeof value === "string" && value.startsWith("ENV:")) {
-    config[key] = process.env[value.replace("ENV:", "")];
+for (const [key, value] of Object.entries(configRaw)) {
+  if (typeof value === 'string' && value.startsWith('ENV:')) {
+    config[key] = process.env[value.replace('ENV:', '')];
   } else {
     config[key] = value;
   }
-};
+}
 
 const commands = [
   new SlashCommandBuilder()
