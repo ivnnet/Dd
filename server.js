@@ -70,6 +70,10 @@ async function isAdmin(req, res, next) {
   }
 }
 
+app.get('/health', (req, res) => {
+  res.status(200).send('OK');
+});
+
 app.get('/auth/discord', passport.authenticate('discord'));
 
 app.get('/auth/callback',
