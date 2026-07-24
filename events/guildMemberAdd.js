@@ -1,16 +1,26 @@
 const { EmbedBuilder } = require('discord.js');
-const { sendLog } = require('../handlers/logger');
+const { sendLog, findUsedInvite } = require('../handlers/logger');
 
 module.exports = {
   name: 'guildMemberAdd',
   async execute(member, client) {
+    const usedInvite = await findUsedInvite(member.guild);
     const embed = new EmbedBuilder()
       .setColor(0x2ecc71)
       .setTitle('Member Joined')
-      .setDescription(`${member.user.tag} (${member.id})`)
+      .setDescription(`<@${member.user.id}> — ${member.user.tag}`)
       .setThumbnail(member.user.displayAvatarURL())
-      .addFields({ name: 'Account Created', value: `<t:${Math.floor(member.user.createdTimestamp / 1000)}:R>` })
-      .setTimestamp();
+      .addFields(
+        { name: 'Account Created', value: `<t:${Math.floor(member.user.createdTimestamp / 1000)}:R>`, inline: true },
+        { name: 'Member Count', value: `${member.guild.memberCount}`, inline: true },
+      );
+    if (usedInvite) {
+      if (usedInvite.inviter) {
+        embed.addFields({ name: 'Invited By', value: `<@${usedInvite.inviter.id}>`, inline: true });
+      }
+      embed.addFields({ name: 'Invite Link', value: usedInvite.url, inline: true });
+    }
+    embed.setTimestamp();
     await sendLog(member.guild, client, embed);
   },
 };

@@ -1,4 +1,5 @@
 const { rebuildActiveTickets } = require('../handlers/modmail');
+const { cacheInvites } = require('../handlers/logger');
 
 module.exports = {
   name: 'ready',
@@ -8,9 +9,12 @@ module.exports = {
     client.user.setActivity('Jump Up Events', { type: 3 });
 
     const guild = client.guilds.cache.get(client.config.guildId);
-    if (guild && client.config.modmailCategoryId) {
-      rebuildActiveTickets(guild, client, client.config.modmailCategoryId);
-      console.log('Active tickets rebuilt from existing channels.');
+    if (guild) {
+      cacheInvites(guild);
+      if (client.config.modmailCategoryId) {
+        rebuildActiveTickets(guild, client, client.config.modmailCategoryId);
+        console.log('Active tickets rebuilt from existing channels.');
+      }
     }
   },
 };
