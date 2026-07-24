@@ -155,6 +155,6 @@ app.get('/LICENSE', (req, res) => {
   res.sendFile(path.join(__dirname, 'LICENSE'));
 });
 
-app.listen(config.port, () => {
+app.listen(config.dashboardPort || process.env.PORT || 3000, () => {
   console.log(`Dashboard running on ${config.dashboardUrl}`);
 });
