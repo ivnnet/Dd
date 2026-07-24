@@ -5,8 +5,8 @@ const path = require('path');
 const configRaw = require('./config.json');
 const config = {};
 for (const [key, value] of Object.entries(configRaw)) {
-  if (typeof value === 'string' && value.startsWith('ENV.')) {
-    config[key] = process.env[value.replace('ENV.', '')];
+  if (typeof value === 'string' && value.startsWith('ENV:')) {
+    config[key] = process.env[value.replace('ENV:', '')];
   } else {
     config[key] = value;
   }

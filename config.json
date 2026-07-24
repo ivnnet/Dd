@@ -1,13 +1,13 @@
 {
-  "token": "ENV.TOKEN",
-  "clientId": "ENV.CLIENT_ID",
-  "guildId": "ENV.GUILD_ID",
-  "clientSecret": "ENV.CLIENT_SECRET",
-  "adminRoleId": "ENV.ADMIN_ROLE_ID",
-  "logChannelId": "ENV.LOG_CHANNEL_ID",
-  "modmailCategoryId": "ENV.MODMAIL_CATEGORY_ID",
+  "token": "ENV:DISCORD_TOKEN",
+  "clientId": "ENV:CLIENT_ID",
+  "guildId": "ENV:GUILD_ID",
+  "clientSecret": "ENV:CLIENT_SECRET",
+  "adminRoleId": "ENV:ADMIN_ROLE_ID",
+  "logChannelId": "ENV:LOG_CHANNEL_ID",
+  "modmailCategoryId": "ENV:MODMAIL_CATEGORY_ID",
   "dashboardPort": 3000,
-  "sessionSecret": "ENV.SESSION_SECRET",
-  "dashboardUrl": "ENV.DASHBOARD_URL",
-  "groqApiKey": "ENV.KEY"
+  "sessionSecret": "ENV:SESSION_SECRET",
+  "dashboardUrl": "ENV:DASHBOARD_URL",
+  "groqApiKey": "ENV:KEY"
 }
