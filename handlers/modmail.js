@@ -18,7 +18,7 @@ async function createTicket(user, guild, client) {
   // Check for existing ticket channel in the category
   const existingChannel = category.children.cache.find(c => c.name === expectedName && c.type === ChannelType.GuildText);
   if (existingChannel) {
-    activeTickets.set(user.id, { channelId: existingChannel.id, userId: user.id, mode: 'ai', history: [] });
+    activeTickets.set(user.id, { channelId: existingChannel.id, userId: user.id, mode: 'human', history: [] });
     await user.send('You already have an open ticket! Please continue in your existing channel.');
     return;
   }
@@ -59,7 +59,7 @@ async function createTicket(user, guild, client) {
     }
   }
 
-  activeTickets.set(user.id, { channelId: channel.id, userId: user.id, mode: 'ai', history: [] });
+  activeTickets.set(user.id, { channelId: channel.id, userId: user.id, mode: 'human', history: [] });
 
   await channel.send({
     content: `**New Support Ticket**\n**User:** ${user.tag} (${user.id})\n\nA support team member will be with you shortly. Please describe your issue in this channel.`,
@@ -180,7 +180,7 @@ function rebuildActiveTickets(guild, client, categoryId) {
     const username = channel.name.replace('ticket-', '');
     const member = guild.members.cache.find(m => m.user.username.toLowerCase().replace(/[^a-z0-9]/g, '') === username);
     const userId = member ? member.id : null;
-    activeTickets.set(userId, { channelId: channel.id, userId, mode: 'ai', history: [] });
+    activeTickets.set(userId, { channelId: channel.id, userId, mode: 'human', history: [] });
   }
 }
 
