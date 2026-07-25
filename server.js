@@ -1,6 +1,5 @@
 const express = require('express');
 const session = require('express-session');
-const FileStore = require('session-file-store')(session);
 const passport = require('passport');
 const DiscordStrategy = require('passport-discord').Strategy;
 const path = require('path');
@@ -45,19 +44,7 @@ passport.use(new DiscordStrategy({
   process.nextTick(() => done(null, profile));
 }));
 
-const sessionDir = path.join(__dirname, 'data', 'sessions');
-let sessionStore;
-try {
-  require('fs').mkdirSync(sessionDir, { recursive: true });
-  sessionStore = new FileStore({ path: sessionDir, ttl: 86400 });
-  console.log('Session store: file-based (persistent)');
-} catch {
-  sessionStore = new session.MemoryStore();
-  console.log('Session store: in-memory (non-persistent)');
-}
-
 app.use(session({
-  store: sessionStore,
   secret: config.sessionSecret,
   resave: false,
   saveUninitialized: false,
