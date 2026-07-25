@@ -19,6 +19,8 @@ const LOGO_URL = process.env.LOGO_URL || 'https://i.ibb.co/Cp40w5YY/icon-1.png';
 let GUILD_NAME = 'the server';
 const auditLog = require('./handlers/auditLog');
 const db = require('./handlers/database');
+const Application = require('./models/Application');
+const Submission = require('./models/Submission');
 
 const app = express();
 const DISCORD_API = 'https://discord.com/api/v10';
@@ -732,6 +734,231 @@ app.post('/api/admin/kill-session', isAuthenticated, isAdmin, (req, res) => {
     });
   } else {
     res.json({ success: true, note: 'MemoryStore does not support enumeration. Session will expire naturally.' });
+  }
+});
+
+app.get('/api/applications', isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    const apps = await Application.find().sort({ createdAt: -1 }).lean();
+    res.json(apps);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/applications', isAuthenticated, isAdmin, restrictMutation, async (req, res) => {
+  try {
+    if (!isOwner(req)) return res.status(403).json({ error: 'Only owners can create applications.' });
+    const { title, description, questions, webhookUrl } = req.body;
+    if (!title || !questions || !questions.length) {
+      return res.status(400).json({ error: 'Title and at least one question are required.' });
+    }
+    const app = new Application({ title, description, questions, webhookUrl, createdBy: req.user.id });
+    await app.save();
+    res.json(app);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/applications/:id', isAuthenticated, isAdmin, restrictMutation, async (req, res) => {
+  try {
+    if (!isOwner(req)) return res.status(403).json({ error: 'Only owners can edit applications.' });
+    const app = await Application.findByIdAndUpdate(req.params.id, req.body, { new: true }).lean();
+    if (!app) return res.status(404).json({ error: 'Application not found.' });
+    res.json(app);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/applications/:id', isAuthenticated, isAdmin, restrictMutation, async (req, res) => {
+  try {
+    if (!isOwner(req)) return res.status(403).json({ error: 'Only owners can delete applications.' });
+    await Application.findByIdAndDelete(req.params.id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/applications/:id/submissions', isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    if (!isOwner(req)) return res.status(403).json({ error: 'Only owners can view submissions.' });
+    const subs = await Submission.find({ applicationId: req.params.id }).sort({ submittedAt: -1 }).lean();
+    res.json(subs);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/applications/public/:id', async (req, res) => {
+  try {
+    const app = await Application.findById(req.params.id).lean();
+    if (!app || !app.active) return res.status(404).json({ error: 'Application not found or inactive.' });
+    res.json({ title: app.title, description: app.description, questions: app.questions });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/applications/public/:id/submit', async (req, res) => {
+  try {
+    const app = await Application.findById(req.params.id);
+    if (!app || !app.active) return res.status(404).json({ error: 'Application not found or inactive.' });
+    const { answers } = req.body;
+    if (!answers || !answers.length) {
+      return res.status(400).json({ error: 'Answers are required.' });
+    }
+    const sub = new Submission({ applicationId: app._id, answers });
+    await sub.save();
+
+    try {
+      const whUrl = app.webhookUrl;
+      if (whUrl) {
+        const lines = answers.map(a => `**${a.question}**\n${a.answer}`).join('\n\n');
+        const body = JSON.stringify({
+          embeds: [{
+            color: 0x9b59b6,
+            title: `New Application — ${app.title}`,
+            description: lines,
+            footer: { text: `Submission #${sub._id}` },
+            timestamp: new Date().toISOString(),
+          }]
+        });
+        const urlObj = new URL(whUrl);
+        const https = require('https');
+        const req = https.request({ hostname: urlObj.hostname, path: urlObj.pathname, method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } });
+        req.write(body);
+        req.end();
+      }
+    } catch {}
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/apply/:id', async (req, res) => {
+  try {
+    const app = await Application.findById(req.params.id).lean();
+    if (!app || !app.active) return res.status(404).send('Application not found.');
+    const questionsJson = JSON.stringify(app.questions);
+    res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${app.title} — Apply</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:#0f0f13; color:#e1e1e6; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; }
+.card { background:#1a1a22; border:1px solid #2a2a35; border-radius:12px; padding:32px; max-width:640px; width:100%; }
+h1 { font-size:24px; font-weight:700; margin-bottom:8px; }
+p.desc { color:#9d9daf; font-size:14px; line-height:1.6; margin-bottom:24px; }
+.form-group { margin-bottom:20px; }
+label { display:block; font-size:13px; color:#9d9daf; margin-bottom:6px; font-weight:500; }
+label .required { color:#ed4245; }
+input, textarea, select { width:100%; padding:10px 14px; background:#0f0f13; border:1px solid #2a2a35; border-radius:8px; color:#e1e1e6; font-size:15px; font-family:inherit; transition:border-color 0.2s; }
+input:focus, textarea:focus, select:focus { outline:none; border-color:#9b59b6; }
+textarea { resize:vertical; min-height:80px; }
+.btn { width:100%; padding:12px; border:none; border-radius:8px; font-size:15px; font-weight:600; cursor:pointer; background:#9b59b6; color:white; transition:background 0.2s; }
+.btn:hover { background:#8e44ad; }
+.btn:disabled { opacity:0.5; cursor:not-allowed; }
+.alert { padding:12px 16px; border-radius:8px; margin-bottom:20px; font-size:14px; display:none; }
+.alert-success { background:#1a3327; border:1px solid #2d6a4f; color:#95d5b2; }
+.alert-error { background:#3a1a1a; border:1px solid #6a2d2d; color:#d59595; }
+.loading { text-align:center; padding:40px; color:#9d9daf; }
+@media (max-width:480px) { .card { padding:20px; } h1 { font-size:20px; } }
+</style>
+</head>
+<body>
+<div class="card" id="app">
+  <div class="loading">Loading application...</div>
+</div>
+<script>
+const API = window.location.origin;
+const appId = '${req.params.id}';
+const questions = ${questionsJson};
+
+function buildForm() {
+  const title = ${JSON.stringify(app.title)};
+  const desc = ${JSON.stringify(app.description || '')};
+  let html = '<h1>' + title + '</h1>';
+  if (desc) html += '<p class="desc">' + desc.replace(/\\n/g, '<br>') + '</p>';
+  html += '<div id="alert" class="alert"></div>';
+  questions.forEach((q, i) => {
+    const req = q.required ? ' <span class="required">*</span>' : '';
+    html += '<div class="form-group">';
+    html += '<label for="q' + i + '">' + q.question + req + '</label>';
+    if (q.type === 'textarea') {
+      html += '<textarea id="q' + i + '" rows="4"' + (q.required ? ' required' : '') + '></textarea>';
+    } else if (q.type === 'select' && q.options) {
+      html += '<select id="q' + i + '"' + (q.required ? ' required' : '') + '>';
+      html += '<option value="">Select...</option>';
+      q.options.forEach(o => { html += '<option value="' + o + '">' + o + '</option>'; });
+      html += '</select>';
+    } else {
+      html += '<input type="text" id="q' + i + '"' + (q.required ? ' required' : '') + '>';
+    }
+    html += '</div>';
+  });
+  html += '<button class="btn" id="submitBtn" onclick="submitApp()">Submit Application</button>';
+  document.getElementById('app').innerHTML = html;
+}
+
+async function submitApp() {
+  const btn = document.getElementById('submitBtn');
+  const alert = document.getElementById('alert');
+  const answers = [];
+  let valid = true;
+  questions.forEach((q, i) => {
+    const el = document.getElementById('q' + i);
+    const val = el ? el.value.trim() : '';
+    if (q.required && !val) { valid = false; el.style.borderColor = '#ed4245'; }
+    else if (el) el.style.borderColor = '';
+    answers.push({ question: q.question, answer: val || '(no answer)' });
+  });
+  if (!valid) {
+    alert.className = 'alert alert-error';
+    alert.textContent = 'Please fill in all required fields.';
+    alert.style.display = 'block';
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = 'Submitting...';
+  try {
+    const res = await fetch(API + '/api/applications/public/' + appId + '/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ answers }),
+    });
+    if (res.ok) {
+      document.getElementById('app').innerHTML = '<div style="text-align:center;padding:40px"><h1 style="color:#95d5b2;margin-bottom:16px">Application Submitted</h1><p style="color:#9d9daf">Thank you! Your application has been received and will be reviewed shortly.</p></div>';
+    } else {
+      const d = await res.json();
+      alert.className = 'alert alert-error';
+      alert.textContent = d.error || 'Submission failed.';
+      alert.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = 'Submit Application';
+    }
+  } catch {
+    alert.className = 'alert alert-error';
+    alert.textContent = 'Network error. Please try again.';
+    alert.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = 'Submit Application';
+  }
+}
+
+buildForm();
+</script>
+</body>
+</html>`);
+  } catch (err) {
+    res.status(500).send('Error loading application.');
   }
 });
 
