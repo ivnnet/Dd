@@ -1,6 +1,8 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { createTicket, getActiveTicket, setActiveTicket, getTicketByChannel } = require('../handlers/modmail');
+const { createTicket, closeTicket, getActiveTicket, setActiveTicket, getTicketByChannel } = require('../handlers/modmail');
 const groq = require('../handlers/groq');
+
+const closePattern = /\b(?:close|end|done|resolve|finish)\s*(?:ticket|conversation|chat|this|the)?\s*(?:ticket|conversation|chat|please)?\b/i;
 
 const processedMessages = new Set();
 
@@ -54,6 +56,18 @@ module.exports = {
 
       await channel.send({ embeds: [embed] });
       try { await message.react('✅'); } catch {}
+
+      if (ticket.mode === 'ai' && closePattern.test(message.content)) {
+        const closeEmbed = new EmbedBuilder()
+          .setColor(0xe74c3c)
+          .setTitle('Ticket Closed')
+          .setDescription('Your ticket has been closed as requested. If you need help again, just send a message.')
+          .setTimestamp();
+        await message.author.send({ embeds: [closeEmbed] });
+        await channel.send({ embeds: [closeEmbed] });
+        setTimeout(() => closeTicket(message.author.id, guild, client), 1000);
+        return;
+      }
 
       if (ticket.mode === 'ai' && groq.isReady()) {
         const aiReply = await groq.getAutoResponse(message.content, ticket.history);
