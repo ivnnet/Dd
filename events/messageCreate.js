@@ -29,8 +29,22 @@ module.exports = {
         if (!ticket) return;
       }
 
-      const channel = guild.channels.cache.get(ticket.channelId);
-      if (!channel) return;
+      let channel = guild.channels.cache.get(ticket.channelId);
+      if (!channel) {
+        try {
+          channel = await client.channels.fetch(ticket.channelId);
+        } catch {
+          await message.author.send('Your ticket channel is unavailable. A new one will be created.');
+          ticket = null;
+        }
+      }
+      if (!channel) {
+        await createTicket(message.author, guild, client);
+        ticket = getActiveTicket(message.author.id);
+        if (!ticket) return;
+        channel = guild.channels.cache.get(ticket.channelId);
+        if (!channel) return;
+      }
 
       const embed = new EmbedBuilder()
         .setColor(0x5865f2)
@@ -64,9 +78,17 @@ module.exports = {
             .setFooter({ text: 'AI-powered response' })
             .setTimestamp();
 
-          await message.author.send({ embeds: [aiEmbed], components: [row] });
+          try {
+            await message.author.send({ embeds: [aiEmbed], components: [row] });
+          } catch (err) {
+            console.error('Failed to send AI response to DM:', err.message);
+          }
 
-          await channel.send({ embeds: [aiEmbed] });
+          try {
+            await channel.send({ embeds: [aiEmbed] });
+          } catch (err) {
+            console.error(`Failed to send AI response to channel ${ticket.channelId}:`, err.message);
+          }
         }
       } else if (ticket.mode === 'ai' && !groq.isReady()) {
         ticket.mode = 'human';
