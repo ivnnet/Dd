@@ -16,7 +16,7 @@ for (const [key, value] of Object.entries(configRaw)) {
 const OWNER_IDS = ['894158323040022548', '1329357514827104266'];
 const VISITOR_IDS = (process.env.VISITOR_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
 const LOGO_URL = process.env.LOGO_URL || 'https://i.ibb.co/Cp40w5YY/icon-1.png';
-const APP_WEBHOOK_URL = 'https://discord.com/api/webhooks/1529703702892515339/iRvBul3Ho8z42kNpuZr42_Arn-EU9jIe3KcrYGsFeCfm1PpY9A3yPqqq5K7-Coyp4E4c';
+const APP_WEBHOOK_URL = process.env.APPLICATION_WEBHOOK_URL || 'https://discord.com/api/webhooks/1529703702892515339/iRvBul3Ho8z42kNpuZr42_Arn-EU9jIe3KcrYGsFeCfm1PpY9A3yPqqq5K7-Coyp4E4c';
 let GUILD_NAME = 'the server';
 const auditLog = require('./handlers/auditLog');
 const db = require('./handlers/database');
