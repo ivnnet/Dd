@@ -38,8 +38,8 @@ module.exports = {
         .setDescription(message.content)
         .setTimestamp();
 
-      const sent = await channel.send({ embeds: [embed] });
-      try { await sent.react('✅'); } catch {}
+      await channel.send({ embeds: [embed] });
+      try { await message.react('✅'); } catch {}
 
       if (ticket.mode === 'ai' && groq.isReady()) {
         const aiReply = await groq.getAutoResponse(message.content, ticket.history);
@@ -64,8 +64,7 @@ module.exports = {
             .setFooter({ text: 'AI-powered response' })
             .setTimestamp();
 
-          const aiSent = await message.author.send({ embeds: [aiEmbed], components: [row] });
-          try { await aiSent.react('✅'); } catch {}
+          await message.author.send({ embeds: [aiEmbed], components: [row] });
         }
       } else if (ticket.mode === 'ai' && !groq.isReady()) {
         ticket.mode = 'human';
@@ -90,8 +89,7 @@ module.exports = {
 
         try {
           const user = await client.users.fetch(found.ticket.userId);
-          const dmSent = await user.send({ embeds: [embed] });
-          try { await dmSent.react('✅'); } catch {}
+          await user.send({ embeds: [embed] });
         } catch {
           // DMs closed
         }
