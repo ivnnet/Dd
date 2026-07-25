@@ -455,6 +455,33 @@ tr:hover td {
 }
 
 @media (max-width: 768px) {
+  .nav {
+    padding: 12px 16px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .nav-brand {
+    font-size: 15px;
+  }
+  .nav-brand img {
+    width: 28px;
+    height: 28px;
+  }
+  .nav-user {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .nav-user span {
+    font-size: 13px;
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .nav-user img {
+    width: 26px;
+    height: 26px;
+  }
   .cards {
     grid-template-columns: 1fr;
   }
