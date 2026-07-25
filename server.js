@@ -330,26 +330,33 @@ app.post('/api/modmail/tickets/:channelId/close', isAuthenticated, isAdmin, rest
           }
         }
       }
-      if (userId && db.isReady()) {
-        const allMsgs = await discordApi(`/channels/${req.params.channelId}/messages?limit=100`);
-        const Transcript = require('./models/Transcript');
-        const transcript = new Transcript({
-          ticketId: req.params.channelId,
-          userId: userId,
-          userTag: `<@${userId}>`,
-          channelId: req.params.channelId,
-          channelName: `ticket-${userId}`,
-          messages: allMsgs.reverse().map(m => ({
-            role: m.author.bot ? 'assistant' : 'user',
-            content: m.content || (m.embeds?.[0]?.description || '(no content)'),
-            timestamp: m.timestamp,
-          })),
-        });
-        await transcript.save();
-        auditLog.logAction('ticket_closed', {
-          userId, guildId: config.guildId, moderatorId: req.user.id,
-          details: { channelId: req.params.channelId, transcriptId: transcript._id.toString(), source: 'web' },
-        });
+      if (userId) {
+        try {
+          const allMsgs = await discordApi(`/channels/${req.params.channelId}/messages?limit=100`);
+          const pastebin = require('./handlers/pastebin');
+          const lines = allMsgs.reverse().map(m => {
+            const author = m.author?.bot ? 'AI/Staff' : (m.author?.username || 'User');
+            return `[${new Date(m.timestamp).toLocaleString()}] ${author}: ${m.content || (m.embeds?.[0]?.description || '(no content)')}`;
+          }).join('\n');
+          const header = `Ticket Transcript\nUser: <@${userId}>\nChannel: ${req.params.channelId}\nClosed: ${new Date().toLocaleString()}\n${'='.repeat(50)}\n\n`;
+          const transcriptUrl = await pastebin.upload(header + lines);
+          if (transcriptUrl && db.isReady()) {
+            const Transcript = require('./models/Transcript');
+            const transcript = new Transcript({
+              ticketId: req.params.channelId,
+              userId,
+              userTag: `<@${userId}>`,
+              channelId: req.params.channelId,
+              channelName: `ticket-${userId}`,
+              url: transcriptUrl,
+            });
+            await transcript.save();
+            auditLog.logAction('ticket_closed', {
+              userId, guildId: config.guildId, moderatorId: req.user.id,
+              details: { channelId: req.params.channelId, transcriptUrl, source: 'web' },
+            });
+          }
+        } catch {}
       }
     } catch {}
     const closeEmbed = {
@@ -750,10 +757,8 @@ app.get('/transcripts/:id', isAuthenticated, isAdmin, async (req, res) => {
     const Transcript = require('./models/Transcript');
     const transcript = await Transcript.findById(req.params.id).lean();
     if (!transcript) return res.status(404).send('Transcript not found');
-    const lines = transcript.messages.map(m =>
-      `[${new Date(m.timestamp).toLocaleString()}] ${m.role === 'user' ? transcript.userTag : 'Staff'}: ${m.content}`
-    ).join('\n');
-    res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Ticket Transcript - ${transcript.channelName}</title><style>body{font-family:monospace;background:#1a1a2e;color:#e0e0e0;padding:20px;max-width:800px;margin:auto}pre{white-space:pre-wrap}.header{border-bottom:1px solid #333;padding-bottom:10px;margin-bottom:20px}.user{color:#9b59b6}.staff{color:#2ecc71}.meta{color:#888;font-size:12px}</style></head><body><div class="header"><h2>Ticket Transcript</h2><div class="meta">User: ${transcript.userTag} | Channel: ${transcript.channelName} | Closed: ${new Date(transcript.closedAt).toLocaleString()}</div></div><pre>${lines}</pre></body></html>`);
+    if (transcript.url) return res.redirect(transcript.url);
+    res.status(404).send('Transcript has no URL.');
   } catch (err) {
     res.status(500).send('Error loading transcript');
   }

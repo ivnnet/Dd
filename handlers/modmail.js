@@ -1,4 +1,5 @@
 const { ChannelType, PermissionsBitField, EmbedBuilder } = require('discord.js');
+const pastebin = require('./pastebin');
 
 const activeTickets = new Map();
 let botClient = null;
@@ -80,33 +81,83 @@ async function closeTicket(userId, guild, client) {
   if (!ticket) return false;
 
   const channel = guild.channels.cache.get(ticket.channelId);
+  let transcriptUrl = null;
   if (channel) {
     try {
+      const allMsgs = await channel.messages.fetch({ limit: 100 });
+      const user = await client.users.fetch(userId).catch(() => null);
+      const lines = allMsgs.reverse().map(m => {
+        const author = m.author.bot ? 'AI/Staff' : (user ? user.tag : 'User');
+        return `[${m.createdAt.toLocaleString()}] ${author}: ${m.content || (m.embeds?.[0]?.description || '(no content)')}`;
+      }).join('\n');
+      const header = `Ticket Transcript\nUser: ${user ? user.tag : userId}\nChannel: ${channel.name}\nClosed: ${new Date().toLocaleString()}\n${'='.repeat(50)}\n\n`;
+      const fullText = header + lines;
+
+      transcriptUrl = await pastebin.upload(fullText);
+
       const db = require('./database');
-      if (db.isReady()) {
-        const allMsgs = await channel.messages.fetch({ limit: 100 });
+      if (db.isReady() && transcriptUrl) {
         const Transcript = require('../models/Transcript');
-        const user = await client.users.fetch(userId).catch(() => null);
         const transcript = new Transcript({
           ticketId: ticket.channelId,
           userId,
           userTag: user ? user.tag : userId,
           channelId: ticket.channelId,
           channelName: channel.name,
-          messages: allMsgs.reverse().map(m => ({
-            role: m.author.bot ? 'assistant' : 'user',
-            content: m.content || (m.embeds?.[0]?.description || '(no content)'),
-            timestamp: m.createdAt,
-          })),
+          url: transcriptUrl,
+          closedAt: new Date(),
         });
         await transcript.save();
         client.auditLog.logAction('ticket_closed', {
           userId, guildId: guild.id,
-          details: { channelId: ticket.channelId, transcriptId: transcript._id.toString(), source: 'auto' },
+          details: { channelId: ticket.channelId, transcriptUrl, source: 'auto' },
         });
       }
+
+      const transcriptChannelId = '1527678402645983422';
+      const transcriptChannel = guild.channels.cache.get(transcriptChannelId);
+      if (transcriptChannel && transcriptUrl) {
+        await transcriptChannel.send({
+          embeds: [new EmbedBuilder()
+            .setColor(0x9b59b6)
+            .setTitle('Ticket Transcript')
+            .addFields(
+              { name: 'User', value: user ? user.tag : userId, inline: true },
+              { name: 'Channel', value: channel.name, inline: true },
+              { name: 'Transcript', value: transcriptUrl },
+            )
+            .setTimestamp()
+          ],
+        });
+      }
+    } catch (err) {
+      console.error('closeTicket transcript error:', err);
+    }
+
+    const closeEmbed = new EmbedBuilder()
+      .setColor(0xe74c3c)
+      .setTitle('Ticket Closed')
+      .setDescription('This ticket is now closed. The channel will be deleted shortly.')
+      .setTimestamp();
+    if (transcriptUrl) {
+      closeEmbed.addFields({ name: 'Transcript', value: transcriptUrl });
+    }
+    await channel.send({ embeds: [closeEmbed] });
+
+    try {
+      if (transcriptUrl) {
+        const user = await client.users.fetch(userId).catch(() => null);
+        if (user) {
+          const dmEmbed = new EmbedBuilder()
+            .setColor(0x2ecc71)
+            .setTitle('Ticket Closed')
+            .setDescription(`Your ticket has been closed. You can view the transcript here:\n${transcriptUrl}`)
+            .setTimestamp();
+          await user.send({ embeds: [dmEmbed] });
+        }
+      }
     } catch {}
-    await channel.send('This ticket is now closed. The channel will be deleted shortly.');
+
     setTimeout(async () => {
       try {
         await channel.delete();

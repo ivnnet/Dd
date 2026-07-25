@@ -454,6 +454,30 @@ tr:hover td {
   padding: 4px 0;
 }
 
+@media (max-width: 480px) {
+  .tab {
+    flex: 1 1 100%;
+    font-size: 11px;
+  }
+  .card h2 {
+    font-size: 14px;
+  }
+  .form-group input, .form-group select {
+    font-size: 16px;
+  }
+  .login-prompt img {
+    width: 60px;
+    height: 60px;
+  }
+  .login-prompt h1 {
+    font-size: 20px;
+  }
+  .login-prompt .btn {
+    font-size: 14px;
+    padding: 10px 24px;
+  }
+}
+
 @media (max-width: 768px) {
   .nav {
     padding: 12px 16px;
@@ -482,10 +506,47 @@ tr:hover td {
     width: 26px;
     height: 26px;
   }
+  .container {
+    padding: 16px 12px;
+  }
   .cards {
     grid-template-columns: 1fr;
   }
   .server-stats {
     grid-template-columns: 1fr;
+  }
+  .tabs {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .tab {
+    flex: 1 1 calc(50% - 4px);
+    font-size: 12px;
+    padding: 8px 4px;
+  }
+  .card {
+    padding: 16px;
+  }
+  table {
+    font-size: 12px;
+  }
+  th, td {
+    padding: 6px 8px;
+  }
+  .msg {
+    max-width: 100%;
+  }
+  .modmail-input {
+    flex-wrap: wrap;
+  }
+  .modmail-input input {
+    flex: 1 1 100%;
+  }
+  .modmail-input button {
+    flex: 1;
+  }
+  .btn {
+    font-size: 13px;
+    padding: 8px 14px;
   }
 }

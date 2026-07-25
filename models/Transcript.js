@@ -6,7 +6,7 @@ const transcriptSchema = new mongoose.Schema({
   userTag: { type: String, default: '' },
   channelId: { type: String, default: '' },
   channelName: { type: String, default: '' },
-  messages: [{ role: String, content: String, timestamp: Date }],
+  url: { type: String, default: '' },
   closedAt: { type: Date, default: Date.now },
 });
 

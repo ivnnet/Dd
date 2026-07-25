@@ -20,9 +20,9 @@ async function fetchAPI(path) {
     const res = await fetch(API + path);
     if (res.status === 401) { renderLogin(); return null; }
     if (res.status === 403) { const d = await res.json().catch(() => ({})); renderForbidden(d.error); return null; }
-    return await res.json();
+    const text = await res.text();
+    try { return JSON.parse(text); } catch { return null; }
   } catch {
-    renderLogin();
     return null;
   }
 }
@@ -629,7 +629,7 @@ async function searchAudit() {
   const rows = data.map(e => {
     const time = new Date(e.timestamp).toLocaleString();
     const details = e.details ? Object.entries(e.details).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join(', ') : '';
-    const transcriptLink = e.details?.transcriptId ? ` <a href="/transcripts/${e.details.transcriptId}" target="_blank" class="btn btn-small btn-primary">View Transcript</a>` : '';
+    const transcriptLink = e.details?.transcriptUrl ? ` <a href="${e.details.transcriptUrl}" target="_blank" class="btn btn-small btn-primary">View Transcript</a>` : '';
     return `<tr>
       <td>${time}</td>
       <td><span class="mode-${e.action}">${e.action}</span></td>
@@ -663,12 +663,12 @@ async function loadTranscripts() {
 
   const rows = data.map(e => {
     const time = new Date(e.timestamp).toLocaleString();
-    const tid = e.details?.transcriptId || '';
+    const url = e.details?.transcriptUrl || '';
     return `<tr>
       <td>${time}</td>
       <td>${e.userTag || e.userId || '-'}</td>
       <td>${e.details?.channelId || '-'}</td>
-      <td>${tid ? `<a href="/transcripts/${tid}" target="_blank" class="btn btn-small btn-primary">View</a>` : '-'}</td>
+      <td>${url ? `<a href="${url}" target="_blank" class="btn btn-small btn-primary">View</a>` : '-'}</td>
     </tr>`;
   }).join('');
 
