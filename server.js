@@ -21,9 +21,10 @@ const app = express();
 const DISCORD_API = 'https://discord.com/api/v10';
 
 async function discordApi(path, options = {}) {
+  const headers = { Authorization: `Bot ${config.token}`, 'Content-Type': 'application/json', ...options.headers };
   const res = await fetch(`${DISCORD_API}${path}`, {
-    headers: { Authorization: `Bot ${config.token}`, 'Content-Type': 'application/json', ...options.headers },
     ...options,
+    headers,
   });
   if (!res.ok) {
     const text = await res.text();
