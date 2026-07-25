@@ -15,6 +15,7 @@
     "express-session": "^1.17.3",
     "groq-sdk": "^0.5.0",
     "passport": "^0.6.0",
-    "passport-discord": "^0.1.4"
+    "passport-discord": "^0.1.4",
+    "session-file-store": "^1.5.0"
   }
 }

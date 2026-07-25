@@ -1,5 +1,6 @@
 const express = require('express');
 const session = require('express-session');
+const FileStore = require('session-file-store')(session);
 const passport = require('passport');
 const DiscordStrategy = require('passport-discord').Strategy;
 const path = require('path');
@@ -44,7 +45,11 @@ passport.use(new DiscordStrategy({
   process.nextTick(() => done(null, profile));
 }));
 
+const sessionDir = path.join(__dirname, 'data', 'sessions');
+try { require('fs').mkdirSync(sessionDir, { recursive: true }); } catch {}
+
 app.use(session({
+  store: new FileStore({ path: sessionDir, ttl: 86400 }),
   secret: config.sessionSecret,
   resave: false,
   saveUninitialized: false,
@@ -381,7 +386,7 @@ app.get('/api/actions/kick', isAuthenticated, isAdmin, restrictMutation, async (
     };
     await discordApi(`/guilds/${config.guildId}/members/${userId}`, {
       method: 'DELETE',
-      body: JSON.stringify({ reason: reason || 'No reason provided.' }),
+      headers: { 'X-Audit-Log-Reason': reason || 'No reason provided.' },
     });
     const logChannelId = config.logChannelId;
     if (logChannelId) {
@@ -412,7 +417,8 @@ app.get('/api/actions/ban', isAuthenticated, isAdmin, restrictMutation, async (r
     };
     await discordApi(`/guilds/${config.guildId}/bans/${userId}`, {
       method: 'PUT',
-      body: JSON.stringify({ reason: reason || 'No reason provided.', delete_message_days: parseInt(deleteDays) || 0 }),
+      body: JSON.stringify({ delete_message_days: parseInt(deleteDays) || 0 }),
+      headers: { 'X-Audit-Log-Reason': reason || 'No reason provided.' },
     });
     const logChannelId = config.logChannelId;
     if (logChannelId) {
@@ -440,7 +446,10 @@ app.get('/api/actions/unban', isAuthenticated, isAdmin, restrictMutation, async 
         timestamp: new Date().toISOString(),
       }]
     };
-    await discordApi(`/guilds/${config.guildId}/bans/${userId}`, { method: 'DELETE' });
+    await discordApi(`/guilds/${config.guildId}/bans/${userId}`, {
+      method: 'DELETE',
+      headers: { 'X-Audit-Log-Reason': reason || 'No reason provided.' },
+    });
     const logChannelId = config.logChannelId;
     if (logChannelId) {
       try { await discordApi(`/channels/${logChannelId}/messages`, { method: 'POST', body: JSON.stringify(logEmbed) }); } catch {}
@@ -477,6 +486,7 @@ app.get('/api/actions/mute', isAuthenticated, isAdmin, restrictMutation, async (
     await discordApi(`/guilds/${config.guildId}/members/${userId}`, {
       method: 'PATCH',
       body: JSON.stringify({ communication_disabled_until: communicationDisabledUntil }),
+      headers: { 'X-Audit-Log-Reason': reason || 'No reason provided.' },
     });
     const logChannelId = config.logChannelId;
     if (logChannelId) {
@@ -507,6 +517,7 @@ app.get('/api/actions/unmute', isAuthenticated, isAdmin, restrictMutation, async
     await discordApi(`/guilds/${config.guildId}/members/${userId}`, {
       method: 'PATCH',
       body: JSON.stringify({ communication_disabled_until: null }),
+      headers: { 'X-Audit-Log-Reason': reason || 'No reason provided.' },
     });
     const logChannelId = config.logChannelId;
     if (logChannelId) {
