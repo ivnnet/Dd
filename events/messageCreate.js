@@ -65,6 +65,8 @@ module.exports = {
             .setTimestamp();
 
           await message.author.send({ embeds: [aiEmbed], components: [row] });
+
+          await channel.send({ embeds: [aiEmbed] });
         }
       } else if (ticket.mode === 'ai' && !groq.isReady()) {
         ticket.mode = 'human';

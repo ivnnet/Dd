@@ -15,7 +15,7 @@ for (const [key, value] of Object.entries(configRaw)) {
 
 const OWNER_IDS = ['894158323040022548', '1329357514827104266'];
 const VISITOR_IDS = (process.env.VISITOR_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
-const LOGO_URL = process.env.LOGO_URL || 'https://media.discordapp.net/attachments/1529062834250715182/1529396105702539414/icon-1.png';
+const LOGO_URL = process.env.LOGO_URL || 'https://i.ibb.co/Cp40w5YY/icon-1.png';
 
 const app = express();
 const DISCORD_API = 'https://discord.com/api/v10';
