@@ -16,6 +16,7 @@ for (const [key, value] of Object.entries(configRaw)) {
 const OWNER_IDS = ['894158323040022548', '1329357514827104266'];
 const VISITOR_IDS = (process.env.VISITOR_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
 const LOGO_URL = process.env.LOGO_URL || 'https://i.ibb.co/Cp40w5YY/icon-1.png';
+const APPLICATION_WEBHOOK_URL = process.env.APPLICATION_WEBHOOK_URL || '';
 let GUILD_NAME = 'the server';
 const auditLog = require('./handlers/auditLog');
 const db = require('./handlers/database');
@@ -753,7 +754,7 @@ app.post('/api/applications', isAuthenticated, isAdmin, restrictMutation, async 
     if (!title || !questions || !questions.length) {
       return res.status(400).json({ error: 'Title and at least one question are required.' });
     }
-    const app = new Application({ title, description, questions, webhookUrl, createdBy: req.user.id });
+    const app = new Application({ title, description, questions, webhookUrl: webhookUrl || APPLICATION_WEBHOOK_URL, createdBy: req.user.id });
     await app.save();
     res.json(app);
   } catch (err) {
