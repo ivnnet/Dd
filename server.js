@@ -144,11 +144,16 @@ app.get('/health', (req, res) => {
   res.status(200).send('OK');
 });
 
-app.get('/auth/discord', passport.authenticate('discord'));
+app.get('/auth/discord', (req, res, next) => {
+  passport.authenticate('discord', { state: req.query.redirect || '' })(req, res, next);
+});
 
 app.get('/auth/callback',
   passport.authenticate('discord', { failureRedirect: '/' }),
-  (req, res) => res.redirect('/dashboard')
+  (req, res) => {
+    const redirect = req.query.state || '/dashboard';
+    res.redirect(redirect);
+  }
 );
 
 app.get('/auth/logout', (req, res) => {
@@ -807,11 +812,11 @@ app.post('/api/applications/public/:id/submit', async (req, res) => {
   try {
     const app = await Application.findById(req.params.id);
     if (!app || !app.active) return res.status(404).json({ error: 'Application not found or inactive.' });
-    const { answers } = req.body;
+    const { answers, userId, userTag } = req.body;
     if (!answers || !answers.length) {
       return res.status(400).json({ error: 'Answers are required.' });
     }
-    const sub = new Submission({ applicationId: app._id, answers });
+    const sub = new Submission({ applicationId: app._id, answers, applicantDiscordId: userId || '', applicantName: userTag || '' });
     await sub.save();
 
     if (APP_WEBHOOK_URL) {
@@ -821,7 +826,8 @@ app.post('/api/applications/public/:id/submit', async (req, res) => {
             color: 0x9b59b6,
             title: app.title,
             description: answers.map(a => `**${a.question}**\n${a.answer}`).join('\n\n'),
-            footer: { text: `Submission #${sub._id}` },
+            author: userId ? { name: userTag || 'Unknown' } : undefined,
+            footer: { text: `ID: ${userId || 'Unknown'} • Submission #${sub._id}` },
             timestamp: new Date().toISOString(),
           }]
         });
@@ -841,9 +847,40 @@ app.post('/api/applications/public/:id/submit', async (req, res) => {
 
 app.get('/apply/:id', async (req, res) => {
   try {
+    if (!req.isAuthenticated()) {
+      const loginUrl = `/auth/discord?redirect=${encodeURIComponent(req.originalUrl)}`;
+      return res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Apply</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:#0f0f13; color:#e1e1e6; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; }
+.card { background:#1a1a22; border:1px solid #2a2a35; border-radius:12px; padding:40px; max-width:420px; width:100%; text-align:center; }
+h1 { font-size:22px; font-weight:700; margin-bottom:12px; }
+p { color:#9d9daf; font-size:14px; line-height:1.6; margin-bottom:24px; }
+.btn { display:inline-block; padding:12px 32px; border:none; border-radius:8px; font-size:15px; font-weight:600; cursor:pointer; background:#5865f2; color:white; text-decoration:none; transition:background 0.2s; }
+.btn:hover { background:#4752c4; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Verify Your Identity</h1>
+  <p>Please log in with Discord to verify your identity before filling out this application.</p>
+  <a href="${loginUrl}" class="btn">Login with Discord</a>
+</div>
+</body>
+</html>`);
+    }
+
     const app = await Application.findById(req.params.id).lean();
     if (!app || !app.active) return res.status(404).send('Application not found.');
     const questionsJson = JSON.stringify(app.questions);
+    const userId = req.user.id;
+    const userTag = req.user.username;
+    const avatar = req.user.avatar ? `https://cdn.discordapp.com/avatars/${req.user.id}/${req.user.avatar}.png` : null;
     res.send(`<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -854,6 +891,10 @@ app.get('/apply/:id', async (req, res) => {
 * { margin:0; padding:0; box-sizing:border-box; }
 body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:#0f0f13; color:#e1e1e6; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; }
 .card { background:#1a1a22; border:1px solid #2a2a35; border-radius:12px; padding:32px; max-width:640px; width:100%; }
+.user-badge { display:flex; align-items:center; gap:10px; padding:12px 16px; background:#0f0f13; border-radius:8px; margin-bottom:20px; border:1px solid #2a2a35; }
+.user-badge img { width:32px; height:32px; border-radius:50%; }
+.user-badge span { font-size:14px; }
+.user-badge .id { color:#9d9daf; font-size:12px; }
 h1 { font-size:24px; font-weight:700; margin-bottom:8px; }
 p.desc { color:#9d9daf; font-size:14px; line-height:1.6; margin-bottom:24px; }
 .form-group { margin-bottom:20px; }
@@ -880,11 +921,14 @@ textarea { resize:vertical; min-height:80px; }
 const API = window.location.origin;
 const appId = '${req.params.id}';
 const questions = ${questionsJson};
+const userId = '${userId}';
+const userTag = '${userTag}';
 
 function buildForm() {
   const title = ${JSON.stringify(app.title)};
   const desc = ${JSON.stringify(app.description || '')};
-  let html = '<h1>' + title + '</h1>';
+  let html = '<div class="user-badge">${avatar ? '<img src="' + avatar + '">' : ''}<div><span>' + userTag + '</span><div class="id">' + userId + '</div></div></div>';
+  html += '<h1>' + title + '</h1>';
   if (desc) html += '<p class="desc">' + desc.replace(/\\n/g, '<br>') + '</p>';
   html += '<div id="alert" class="alert"></div>';
   questions.forEach((q, i) => {
@@ -931,7 +975,7 @@ async function submitApp() {
     const res = await fetch(API + '/api/applications/public/' + appId + '/submit', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ answers }),
+      body: JSON.stringify({ answers, userId, userTag }),
     });
     if (res.ok) {
       document.getElementById('app').innerHTML = '<div style="text-align:center;padding:40px"><h1 style="color:#95d5b2;margin-bottom:16px">Application Submitted</h1><p style="color:#9d9daf">Thank you! Your application has been received and will be reviewed shortly.</p></div>';
