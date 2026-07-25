@@ -10,5 +10,5 @@
   "sessionSecret": "ENV:SESSION_SECRET",
   "dashboardUrl": "ENV:DASHBOARD_URL",
   "groqApiKey": "ENV:KEY",
-  "logoUrl": "ENV:LOGO_URL"
+  "logoUrl": "ENV:LOGO"
 }
