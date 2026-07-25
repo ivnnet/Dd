@@ -8,10 +8,11 @@
 </head>
 <body>
 <div id="app"></div>
+<script>window.__LOGO_URL__ = "LOGO_URL_PLACEHOLDER";</script>
 
 <script>
 const API = window.location.origin;
-let LOGO_URL = 'https://media.discordapp.net/attachments/1529062834250715182/1529396105702539414/icon-1.png';
+let LOGO_URL = window.__LOGO_URL__ || 'https://media.discordapp.net/attachments/1529062834250715182/1529396105702539414/icon-1.png';
 let CURRENT_USER = null;
 
 async function fetchAPI(path) {
@@ -27,8 +28,6 @@ async function fetchAPI(path) {
 }
 
 async function init() {
-  const configData = await fetchAPI('/api/config');
-  if (configData) LOGO_URL = configData.logoUrl;
   const me = await fetchAPI('/api/me');
   if (!me) return;
   CURRENT_USER = me;

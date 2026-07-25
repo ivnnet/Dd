@@ -606,17 +606,23 @@ app.post('/api/admin/kill-session', isAuthenticated, isAdmin, (req, res) => {
   }
 });
 
-app.get('/dashboard', isAuthenticated, isAdmin, (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
+app.get('/LICENSE', (req, res) => {
+  res.sendFile(path.join(__dirname, 'LICENSE'));
 });
+
+function serveDashboard(req, res) {
+  const filePath = path.join(__dirname, 'public', 'dashboard.html');
+  const fs = require('fs');
+  let html = fs.readFileSync(filePath, 'utf8');
+  html = html.replace('LOGO_URL_PLACEHOLDER', LOGO_URL);
+  res.send(html);
+}
+
+app.get('/dashboard', isAuthenticated, isAdmin, serveDashboard);
 
 app.get('/', (req, res) => {
   if (req.isAuthenticated()) return res.redirect('/dashboard');
-  res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
-});
-
-app.get('/LICENSE', (req, res) => {
-  res.sendFile(path.join(__dirname, 'LICENSE'));
+  serveDashboard(req, res);
 });
 
 const PORT = process.env.PORT || config.dashboardPort || 3000;
