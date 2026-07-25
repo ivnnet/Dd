@@ -10,7 +10,7 @@ function loadKnowledge() {
     const knowledgePath = path.join(__dirname, '..', 'knowledge.json');
     if (fs.existsSync(knowledgePath)) {
       const data = JSON.parse(fs.readFileSync(knowledgePath, 'utf8'));
-      knowledgeContext = `You are ${data.identity.name}, version ${data.identity.version}. ${data.identity.description}.\n\nYour personality: ${data.response_context.personality}\n\nGuidelines:\n- ${data.response_context.guidelines.join('\n- ')}\n\nFAQ:\n${data.response_context.faq.map(f => `Q: ${f.question}\nA: ${f.answer}`).join('\n\n')}`;
+      knowledgeContext = `You are ${data.identity.name}, version ${data.identity.version}. ${data.identity.description}.\nDeveloped by ${data.identity.developer} (${data.identity.year}).\n\nYour personality: ${data.response_context.personality}\n\nGuidelines:\n- ${data.response_context.guidelines.join('\n- ')}\n\nFAQ:\n${data.response_context.faq.map(f => `Q: ${f.question}\nA: ${f.answer}`).join('\n\n')}`;
       console.log('Knowledge context loaded.');
     }
   } catch (err) {

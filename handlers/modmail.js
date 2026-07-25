@@ -19,7 +19,6 @@ async function createTicket(user, guild, client) {
   const existingChannel = category.children.cache.find(c => c.name === expectedName && c.type === ChannelType.GuildText);
   if (existingChannel) {
     activeTickets.set(user.id, { channelId: existingChannel.id, userId: user.id, mode: 'ai', history: [] });
-    await user.send('You already have an open ticket! Please continue in your existing channel.');
     return;
   }
 
@@ -27,7 +26,6 @@ async function createTicket(user, guild, client) {
     const existing = activeTickets.get(user.id);
     const channel = guild.channels.cache.get(existing.channelId);
     if (channel) {
-      await user.send('You already have an open ticket! Please continue in your existing channel.');
       return;
     }
     activeTickets.delete(user.id);
