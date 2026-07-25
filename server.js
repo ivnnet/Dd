@@ -22,7 +22,8 @@ const app = express();
 const DISCORD_API = 'https://discord.com/api/v10';
 
 async function discordApi(path, options = {}) {
-  const headers = { Authorization: `Bot ${config.token}`, 'Content-Type': 'application/json', ...options.headers };
+  const headers = { Authorization: `Bot ${config.token}`, ...options.headers };
+  if (options.body) headers['Content-Type'] = 'application/json';
   const res = await fetch(`${DISCORD_API}${path}`, {
     ...options,
     headers,
@@ -395,7 +396,6 @@ app.get('/api/actions/kick', isAuthenticated, isAdmin, restrictMutation, async (
       description: `**Reason:** ${reason || 'No reason provided.'}`,
       timestamp: new Date().toISOString(),
     };
-    await sendUserDM(userId, dmEmbed);
     const logEmbed = {
       embeds: [{
         color: 0xe74c3c,
@@ -417,6 +417,7 @@ app.get('/api/actions/kick', isAuthenticated, isAdmin, restrictMutation, async (
     if (logChannelId) {
       try { await discordApi(`/channels/${logChannelId}/messages`, { method: 'POST', body: JSON.stringify(logEmbed) }); } catch {}
     }
+    sendUserDM(userId, dmEmbed);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -433,7 +434,6 @@ app.get('/api/actions/ban', isAuthenticated, isAdmin, restrictMutation, async (r
       description: `**Reason:** ${reason || 'No reason provided.'}`,
       timestamp: new Date().toISOString(),
     };
-    await sendUserDM(userId, dmEmbed);
     const logEmbed = {
       embeds: [{
         color: 0xe74c3c,
@@ -456,6 +456,7 @@ app.get('/api/actions/ban', isAuthenticated, isAdmin, restrictMutation, async (r
     if (logChannelId) {
       try { await discordApi(`/channels/${logChannelId}/messages`, { method: 'POST', body: JSON.stringify(logEmbed) }); } catch {}
     }
+    sendUserDM(userId, dmEmbed);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -472,7 +473,6 @@ app.get('/api/actions/unban', isAuthenticated, isAdmin, restrictMutation, async 
       description: `**Reason:** ${reason || 'No reason provided.'}`,
       timestamp: new Date().toISOString(),
     };
-    await sendUserDM(userId, dmEmbed);
     const logEmbed = {
       embeds: [{
         color: 0x2ecc71,
@@ -493,6 +493,7 @@ app.get('/api/actions/unban', isAuthenticated, isAdmin, restrictMutation, async 
     if (logChannelId) {
       try { await discordApi(`/channels/${logChannelId}/messages`, { method: 'POST', body: JSON.stringify(logEmbed) }); } catch {}
     }
+    sendUserDM(userId, dmEmbed);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -515,7 +516,6 @@ app.get('/api/actions/mute', isAuthenticated, isAdmin, restrictMutation, async (
       description: `**Duration:** ${duration}\n**Reason:** ${reason || 'No reason provided.'}`,
       timestamp: new Date().toISOString(),
     };
-    await sendUserDM(userId, dmEmbed);
     const logEmbed = {
       embeds: [{
         color: 0xf39c12,
@@ -538,6 +538,7 @@ app.get('/api/actions/mute', isAuthenticated, isAdmin, restrictMutation, async (
     if (logChannelId) {
       try { await discordApi(`/channels/${logChannelId}/messages`, { method: 'POST', body: JSON.stringify(logEmbed) }); } catch {}
     }
+    sendUserDM(userId, dmEmbed);
     res.json({ success: true, until: communicationDisabledUntil });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -554,7 +555,6 @@ app.get('/api/actions/unmute', isAuthenticated, isAdmin, restrictMutation, async
       description: `**Reason:** ${reason || 'No reason provided.'}`,
       timestamp: new Date().toISOString(),
     };
-    await sendUserDM(userId, dmEmbed);
     const logEmbed = {
       embeds: [{
         color: 0x2ecc71,
@@ -576,6 +576,7 @@ app.get('/api/actions/unmute', isAuthenticated, isAdmin, restrictMutation, async
     if (logChannelId) {
       try { await discordApi(`/channels/${logChannelId}/messages`, { method: 'POST', body: JSON.stringify(logEmbed) }); } catch {}
     }
+    sendUserDM(userId, dmEmbed);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -608,7 +609,7 @@ app.get('/api/actions/strike', isAuthenticated, isAdmin, restrictMutation, async
       description: `You have received a strike.\n**Reason:** ${publicReason}\n**Strike ID:** #${strikeId}`,
       timestamp: new Date().toISOString(),
     };
-    await sendUserDM(userId, dmEmbed);
+
     const logChannelId = config.logChannelId;
     if (logChannelId) {
       try {
@@ -631,6 +632,7 @@ app.get('/api/actions/strike', isAuthenticated, isAdmin, restrictMutation, async
         });
       } catch {}
     }
+    sendUserDM(userId, dmEmbed);
     res.json({ success: true, strikeId });
   } catch (err) {
     res.status(500).json({ error: err.message });
