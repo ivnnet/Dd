@@ -46,10 +46,18 @@ passport.use(new DiscordStrategy({
 }));
 
 const sessionDir = path.join(__dirname, 'data', 'sessions');
-try { require('fs').mkdirSync(sessionDir, { recursive: true }); } catch {}
+let sessionStore;
+try {
+  require('fs').mkdirSync(sessionDir, { recursive: true });
+  sessionStore = new FileStore({ path: sessionDir, ttl: 86400 });
+  console.log('Session store: file-based (persistent)');
+} catch {
+  sessionStore = new session.MemoryStore();
+  console.log('Session store: in-memory (non-persistent)');
+}
 
 app.use(session({
-  store: new FileStore({ path: sessionDir, ttl: 86400 }),
+  store: sessionStore,
   secret: config.sessionSecret,
   resave: false,
   saveUninitialized: false,
