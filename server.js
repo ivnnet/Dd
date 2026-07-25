@@ -16,7 +16,7 @@ for (const [key, value] of Object.entries(configRaw)) {
 const OWNER_IDS = ['894158323040022548', '1329357514827104266'];
 const VISITOR_IDS = (process.env.VISITOR_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
 const LOGO_URL = process.env.LOGO_URL || 'https://i.ibb.co/Cp40w5YY/icon-1.png';
-const APP_WEBHOOK_URL = process.env.APPLICATION_WEBHOOK_URL || 'https://discord.com/api/webhooks/1529703702892515339/iRvBul3Ho8z42kNpuZr42_Arn-EU9jIe3KcrYGsFeCfm1PpY9A3yPqqq5K7-Coyp4E4c';
+const APP_WEBHOOK_URL = process.env.APPLICATION_WEBHOOK_URL || '';
 let GUILD_NAME = 'the server';
 const auditLog = require('./handlers/auditLog');
 const db = require('./handlers/database');
@@ -814,22 +814,24 @@ app.post('/api/applications/public/:id/submit', async (req, res) => {
     const sub = new Submission({ applicationId: app._id, answers });
     await sub.save();
 
-    try {
-      const body = JSON.stringify({
-        embeds: [{
-          color: 0x9b59b6,
-          title: app.title,
-          description: answers.map(a => `**${a.question}**\n${a.answer}`).join('\n\n'),
-          footer: { text: `Submission #${sub._id}` },
-          timestamp: new Date().toISOString(),
-        }]
-      });
-      const urlObj = new URL(APP_WEBHOOK_URL);
-      const https = require('https');
-      const r = https.request({ hostname: urlObj.hostname, path: urlObj.pathname, method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } });
-      r.write(body);
-      r.end();
-    } catch {}
+    if (APP_WEBHOOK_URL) {
+      try {
+        const body = JSON.stringify({
+          embeds: [{
+            color: 0x9b59b6,
+            title: app.title,
+            description: answers.map(a => `**${a.question}**\n${a.answer}`).join('\n\n'),
+            footer: { text: `Submission #${sub._id}` },
+            timestamp: new Date().toISOString(),
+          }]
+        });
+        const urlObj = new URL(APP_WEBHOOK_URL);
+        const https = require('https');
+        const r = https.request({ hostname: urlObj.hostname, path: urlObj.pathname, method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } });
+        r.write(body);
+        r.end();
+      } catch {}
+    }
 
     res.json({ success: true });
   } catch (err) {
