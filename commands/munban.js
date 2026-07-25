@@ -18,6 +18,16 @@ module.exports = {
 
       await interaction.guild.members.unban(userId, reason);
 
+      const dmEmbed = new EmbedBuilder()
+        .setColor(0x2ecc71)
+        .setTitle(`Unbanned from ${interaction.guild.name}`)
+        .setDescription(`**Reason:** ${reason}`)
+        .setTimestamp();
+
+      try {
+        await banned.user.send({ embeds: [dmEmbed] });
+      } catch {}
+
       const logEmbed = new EmbedBuilder()
         .setColor(0x2ecc71)
         .setTitle('Member Unbanned')

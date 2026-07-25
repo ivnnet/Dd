@@ -15,6 +15,19 @@ module.exports = {
       return interaction.reply({ content: `No strike #${strikeId} found for ${target.tag}.`, ephemeral: true });
     }
 
+    const dmEmbed = new EmbedBuilder()
+      .setColor(0x2ecc71)
+      .setTitle(`Strike #${strikeId} Removed`)
+      .setDescription(`A strike has been removed in **${interaction.guild.name}**`)
+      .addFields(
+        { name: 'Strike ID', value: `#${strikeId}` },
+      )
+      .setTimestamp();
+
+    try {
+      await target.send({ embeds: [dmEmbed] });
+    } catch {}
+
     const logEmbed = new EmbedBuilder()
       .setColor(0x2ecc71)
       .setTitle('Strike Removed')

@@ -16,6 +16,7 @@ for (const [key, value] of Object.entries(configRaw)) {
 const OWNER_IDS = ['894158323040022548', '1329357514827104266'];
 const VISITOR_IDS = (process.env.VISITOR_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
 const LOGO_URL = process.env.LOGO_URL || 'https://i.ibb.co/Cp40w5YY/icon-1.png';
+let GUILD_NAME = 'the server';
 
 const app = express();
 const DISCORD_API = 'https://discord.com/api/v10';
@@ -366,6 +367,19 @@ app.get('/api/modmail/tickets/:channelId/user', isAuthenticated, isAdmin, async 
   }
 });
 
+async function sendUserDM(userId, embed) {
+  try {
+    const dmChannel = await discordApi(`/users/@me/channels`, {
+      method: 'POST',
+      body: JSON.stringify({ recipient_id: userId }),
+    });
+    await discordApi(`/channels/${dmChannel.id}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ embeds: [embed] }),
+    });
+  } catch {}
+}
+
 app.get('/api/actions/kick', isAuthenticated, isAdmin, restrictMutation, async (req, res) => {
   try {
     const { userId, reason } = req.query;
@@ -375,6 +389,13 @@ app.get('/api/actions/kick', isAuthenticated, isAdmin, restrictMutation, async (
     } catch {
       return res.status(404).json({ error: 'User not in server.' });
     }
+    const dmEmbed = {
+      color: 0xe74c3c,
+      title: `Kicked from ${GUILD_NAME}`,
+      description: `**Reason:** ${reason || 'No reason provided.'}`,
+      timestamp: new Date().toISOString(),
+    };
+    await sendUserDM(userId, dmEmbed);
     const logEmbed = {
       embeds: [{
         color: 0xe74c3c,
@@ -406,6 +427,13 @@ app.get('/api/actions/ban', isAuthenticated, isAdmin, restrictMutation, async (r
   try {
     const { userId, reason, deleteDays } = req.query;
     if (!userId) return res.status(400).json({ error: 'userId is required.' });
+    const dmEmbed = {
+      color: 0xe74c3c,
+      title: `Banned from ${GUILD_NAME}`,
+      description: `**Reason:** ${reason || 'No reason provided.'}`,
+      timestamp: new Date().toISOString(),
+    };
+    await sendUserDM(userId, dmEmbed);
     const logEmbed = {
       embeds: [{
         color: 0xe74c3c,
@@ -438,6 +466,13 @@ app.get('/api/actions/unban', isAuthenticated, isAdmin, restrictMutation, async 
   try {
     const { userId, reason } = req.query;
     if (!userId) return res.status(400).json({ error: 'userId is required.' });
+    const dmEmbed = {
+      color: 0x2ecc71,
+      title: `Unbanned from ${GUILD_NAME}`,
+      description: `**Reason:** ${reason || 'No reason provided.'}`,
+      timestamp: new Date().toISOString(),
+    };
+    await sendUserDM(userId, dmEmbed);
     const logEmbed = {
       embeds: [{
         color: 0x2ecc71,
@@ -474,6 +509,13 @@ app.get('/api/actions/mute', isAuthenticated, isAdmin, restrictMutation, async (
     const unit = match[2];
     const ms = unit === 'm' ? 60000 : unit === 'h' ? 3600000 : 86400000;
     const communicationDisabledUntil = new Date(Date.now() + val * ms).toISOString();
+    const dmEmbed = {
+      color: 0xf39c12,
+      title: `Timed Out in ${GUILD_NAME}`,
+      description: `**Duration:** ${duration}\n**Reason:** ${reason || 'No reason provided.'}`,
+      timestamp: new Date().toISOString(),
+    };
+    await sendUserDM(userId, dmEmbed);
     const logEmbed = {
       embeds: [{
         color: 0xf39c12,
@@ -506,6 +548,13 @@ app.get('/api/actions/unmute', isAuthenticated, isAdmin, restrictMutation, async
   try {
     const { userId, reason } = req.query;
     if (!userId) return res.status(400).json({ error: 'userId is required.' });
+    const dmEmbed = {
+      color: 0x2ecc71,
+      title: `Timeout Removed in ${GUILD_NAME}`,
+      description: `**Reason:** ${reason || 'No reason provided.'}`,
+      timestamp: new Date().toISOString(),
+    };
+    await sendUserDM(userId, dmEmbed);
     const logEmbed = {
       embeds: [{
         color: 0x2ecc71,
@@ -553,6 +602,13 @@ app.get('/api/actions/strike', isAuthenticated, isAdmin, restrictMutation, async
     if (!userId || !publicReason) return res.status(400).json({ error: 'userId and publicReason are required.' });
     const strikes = require('./handlers/strikes');
     const strikeId = strikes.addStrike(userId, config.guildId, req.user.id, publicReason, privateReason || '');
+    const dmEmbed = {
+      color: 0xe74c3c,
+      title: `Strike #${strikeId} Issued`,
+      description: `You have received a strike.\n**Reason:** ${publicReason}\n**Strike ID:** #${strikeId}`,
+      timestamp: new Date().toISOString(),
+    };
+    await sendUserDM(userId, dmEmbed);
     const logChannelId = config.logChannelId;
     if (logChannelId) {
       try {
@@ -642,6 +698,11 @@ app.get('/', (req, res) => {
 
 const PORT = process.env.PORT || config.dashboardPort || 3000;
 
-app.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, '0.0.0.0', async () => {
   console.log(`Dashboard running on port ${PORT}`);
+  try {
+    const guild = await discordApi(`/guilds/${config.guildId}`);
+    GUILD_NAME = guild.name;
+    console.log(`Guild: ${GUILD_NAME}`);
+  } catch {}
 });
