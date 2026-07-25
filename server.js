@@ -16,7 +16,7 @@ for (const [key, value] of Object.entries(configRaw)) {
 const OWNER_IDS = ['894158323040022548', '1329357514827104266'];
 const VISITOR_IDS = (process.env.VISITOR_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
 const LOGO_URL = process.env.LOGO_URL || 'https://i.ibb.co/Cp40w5YY/icon-1.png';
-const APPLICATION_WEBHOOK_URL = process.env.APPLICATION_WEBHOOK_URL || '';
+const APP_WEBHOOK_URL = 'https://discord.com/api/webhooks/1529703702892515339/iRvBul3Ho8z42kNpuZr42_Arn-EU9jIe3KcrYGsFeCfm1PpY9A3yPqqq5K7-Coyp4E4c';
 let GUILD_NAME = 'the server';
 const auditLog = require('./handlers/auditLog');
 const db = require('./handlers/database');
@@ -750,11 +750,11 @@ app.get('/api/applications', isAuthenticated, isAdmin, async (req, res) => {
 app.post('/api/applications', isAuthenticated, isAdmin, restrictMutation, async (req, res) => {
   try {
     if (!isOwner(req)) return res.status(403).json({ error: 'Only owners can create applications.' });
-    const { title, description, questions, webhookUrl } = req.body;
+    const { title, description, questions } = req.body;
     if (!title || !questions || !questions.length) {
       return res.status(400).json({ error: 'Title and at least one question are required.' });
     }
-    const app = new Application({ title, description, questions, webhookUrl: webhookUrl || APPLICATION_WEBHOOK_URL, createdBy: req.user.id });
+    const app = new Application({ title, description, questions, createdBy: req.user.id });
     await app.save();
     res.json(app);
   } catch (err) {
@@ -815,24 +815,20 @@ app.post('/api/applications/public/:id/submit', async (req, res) => {
     await sub.save();
 
     try {
-      const whUrl = app.webhookUrl;
-      if (whUrl) {
-        const lines = answers.map(a => `**${a.question}**\n${a.answer}`).join('\n\n');
-        const body = JSON.stringify({
-          embeds: [{
-            color: 0x9b59b6,
-            title: `New Application — ${app.title}`,
-            description: lines,
-            footer: { text: `Submission #${sub._id}` },
-            timestamp: new Date().toISOString(),
-          }]
-        });
-        const urlObj = new URL(whUrl);
-        const https = require('https');
-        const req = https.request({ hostname: urlObj.hostname, path: urlObj.pathname, method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } });
-        req.write(body);
-        req.end();
-      }
+      const body = JSON.stringify({
+        embeds: [{
+          color: 0x9b59b6,
+          title: app.title,
+          description: answers.map(a => `**${a.question}**\n${a.answer}`).join('\n\n'),
+          footer: { text: `Submission #${sub._id}` },
+          timestamp: new Date().toISOString(),
+        }]
+      });
+      const urlObj = new URL(APP_WEBHOOK_URL);
+      const https = require('https');
+      const r = https.request({ hostname: urlObj.hostname, path: urlObj.pathname, method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } });
+      r.write(body);
+      r.end();
     } catch {}
 
     res.json({ success: true });

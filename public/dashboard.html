@@ -267,10 +267,7 @@ function renderDashboard(me) {
               <label>Description</label>
               <textarea id="app-desc" placeholder="Describe what this application is for..." rows="3"></textarea>
             </div>
-            <div class="form-group">
-              <label>Discord Webhook URL (for submissions)</label>
-              <input type="text" id="app-webhook" placeholder="https://discord.com/api/webhooks/...">
-            </div>
+
             <div class="form-group">
               <label>Questions</label>
               <div id="app-questions">
@@ -734,7 +731,6 @@ function addAppQuestion() {
 async function createApplication() {
   const title = document.getElementById('app-title').value.trim();
   const description = document.getElementById('app-desc').value.trim();
-  const webhookUrl = document.getElementById('app-webhook').value.trim();
   const el = document.getElementById('app-create-result');
 
   const questionEls = document.querySelectorAll('#app-questions .app-question');
@@ -753,13 +749,12 @@ async function createApplication() {
   const res = await fetch(API + '/api/applications', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ title, description, questions, webhookUrl }),
+    body: JSON.stringify({ title, description, questions }),
   });
   if (res.ok) {
     el.innerHTML = '<div class="alert alert-success">Application created! ✅</div>';
     document.getElementById('app-title').value = '';
     document.getElementById('app-desc').value = '';
-    document.getElementById('app-webhook').value = '';
     document.getElementById('app-questions').innerHTML = '';
     loadApplications();
   } else {
