@@ -57,19 +57,23 @@ module.exports = {
       await channel.send({ embeds: [embed] });
       try { await message.react('✅'); } catch {}
 
-      if (ticket.mode === 'ai' && closePattern.test(message.content)) {
-        const closeEmbed = new EmbedBuilder()
-          .setColor(0xe74c3c)
-          .setTitle('Ticket Closed')
-          .setDescription('Your ticket has been closed as requested. If you need help again, just send a message.')
-          .setTimestamp();
-        await message.author.send({ embeds: [closeEmbed] });
-        await channel.send({ embeds: [closeEmbed] });
-        setTimeout(() => closeTicket(message.author.id, guild, client), 1000);
-        return;
-      }
-
       if (ticket.mode === 'ai' && groq.isReady()) {
+        if (closePattern.test(message.content)) {
+          const resolved = await groq.checkResolution([...ticket.history, { role: 'user', text: message.content }]);
+          if (resolved === true) {
+            ticket.history.push({ role: 'user', text: message.content });
+            setActiveTicket(message.author.id, ticket);
+            const closeEmbed = new EmbedBuilder()
+              .setColor(0xe74c3c)
+              .setTitle('Ticket Closed')
+              .setDescription('Your ticket has been closed. If you need help again, just send a message.')
+              .setTimestamp();
+            await message.author.send({ embeds: [closeEmbed] });
+            await channel.send({ embeds: [closeEmbed] });
+            setTimeout(() => closeTicket(message.author.id, guild, client), 1000);
+            return;
+          }
+        }
         const aiReply = await groq.getAutoResponse(message.content, ticket.history);
 
         if (aiReply) {
