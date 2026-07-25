@@ -425,67 +425,72 @@ async function confirmConversationClose() {
   }
 }
 
-async function webKick() {
+async function webAction(url, successMsg, resultId, clearIds) {
+  const el = document.getElementById(resultId);
+  try {
+    const res = await fetch(url);
+    let data = { error: 'Failed' };
+    try { data = await res.json(); } catch {}
+    if (res.ok) {
+      el.innerHTML = '<div class="alert alert-success">' + successMsg + ' ✅</div>';
+      clearIds.forEach(id => { const inp = document.getElementById(id); if (inp) inp.value = ''; });
+    } else {
+      el.innerHTML = '<div class="alert alert-error">' + (data.error || 'Request failed') + '</div>';
+    }
+  } catch {
+    el.innerHTML = '<div class="alert alert-error">Network error.</div>';
+  }
+}
+
+function webKick() {
   const userId = document.getElementById('kick-user').value.trim();
   const reason = document.getElementById('kick-reason').value.trim();
   const el = document.getElementById('kick-result');
   if (!userId) { el.innerHTML = '<div class="alert alert-error">User ID required.</div>'; return; }
-  const res = await fetch(API + '/api/actions/kick?userId=' + encodeURIComponent(userId) + '&reason=' + encodeURIComponent(reason));
-  if (res.ok) { el.innerHTML = '<div class="alert alert-success">Kicked. ✅</div>'; document.getElementById('kick-user').value = ''; document.getElementById('kick-reason').value = ''; }
-  else { const d = await res.json(); el.innerHTML = '<div class="alert alert-error">' + (d.error || 'Failed') + '</div>'; }
+  webAction(API + '/api/actions/kick?userId=' + encodeURIComponent(userId) + '&reason=' + encodeURIComponent(reason), 'Kicked', 'kick-result', ['kick-user', 'kick-reason']);
 }
 
-async function webBan() {
+function webBan() {
   const userId = document.getElementById('ban-user').value.trim();
   const reason = document.getElementById('ban-reason').value.trim();
   const deleteDays = document.getElementById('ban-days').value;
   const el = document.getElementById('ban-result');
   if (!userId) { el.innerHTML = '<div class="alert alert-error">User ID required.</div>'; return; }
-  const res = await fetch(API + '/api/actions/ban?userId=' + encodeURIComponent(userId) + '&reason=' + encodeURIComponent(reason) + '&deleteDays=' + encodeURIComponent(deleteDays));
-  if (res.ok) { el.innerHTML = '<div class="alert alert-success">Banned. ✅</div>'; document.getElementById('ban-user').value = ''; document.getElementById('ban-reason').value = ''; }
-  else { const d = await res.json(); el.innerHTML = '<div class="alert alert-error">' + (d.error || 'Failed') + '</div>'; }
+  webAction(API + '/api/actions/ban?userId=' + encodeURIComponent(userId) + '&reason=' + encodeURIComponent(reason) + '&deleteDays=' + encodeURIComponent(deleteDays), 'Banned', 'ban-result', ['ban-user', 'ban-reason']);
 }
 
-async function webUnban() {
+function webUnban() {
   const userId = document.getElementById('unban-user').value.trim();
   const reason = document.getElementById('unban-reason').value.trim();
   const el = document.getElementById('unban-result');
   if (!userId) { el.innerHTML = '<div class="alert alert-error">User ID required.</div>'; return; }
-  const res = await fetch(API + '/api/actions/unban?userId=' + encodeURIComponent(userId) + '&reason=' + encodeURIComponent(reason));
-  if (res.ok) { el.innerHTML = '<div class="alert alert-success">Unbanned. ✅</div>'; document.getElementById('unban-user').value = ''; document.getElementById('unban-reason').value = ''; }
-  else { const d = await res.json(); el.innerHTML = '<div class="alert alert-error">' + (d.error || 'Failed') + '</div>'; }
+  webAction(API + '/api/actions/unban?userId=' + encodeURIComponent(userId) + '&reason=' + encodeURIComponent(reason), 'Unbanned', 'unban-result', ['unban-user', 'unban-reason']);
 }
 
-async function webMute() {
+function webMute() {
   const userId = document.getElementById('mute-user').value.trim();
   const duration = document.getElementById('mute-duration').value.trim();
   const reason = document.getElementById('mute-reason').value.trim();
   const el = document.getElementById('mute-result');
   if (!userId || !duration) { el.innerHTML = '<div class="alert alert-error">User ID and duration required.</div>'; return; }
-  const res = await fetch(API + '/api/actions/mute?userId=' + encodeURIComponent(userId) + '&duration=' + encodeURIComponent(duration) + '&reason=' + encodeURIComponent(reason));
-  if (res.ok) { el.innerHTML = '<div class="alert alert-success">Muted. ✅</div>'; document.getElementById('mute-user').value = ''; document.getElementById('mute-duration').value = ''; document.getElementById('mute-reason').value = ''; }
-  else { const d = await res.json(); el.innerHTML = '<div class="alert alert-error">' + (d.error || 'Failed') + '</div>'; }
+  webAction(API + '/api/actions/mute?userId=' + encodeURIComponent(userId) + '&duration=' + encodeURIComponent(duration) + '&reason=' + encodeURIComponent(reason), 'Muted', 'mute-result', ['mute-user', 'mute-duration', 'mute-reason']);
 }
 
-async function webUnmute() {
+function webUnmute() {
   const userId = document.getElementById('unmute-user').value.trim();
   const reason = document.getElementById('unmute-reason').value.trim();
   const el = document.getElementById('unmute-result');
   if (!userId) { el.innerHTML = '<div class="alert alert-error">User ID required.</div>'; return; }
-  const res = await fetch(API + '/api/actions/unmute?userId=' + encodeURIComponent(userId) + '&reason=' + encodeURIComponent(reason));
-  if (res.ok) { el.innerHTML = '<div class="alert alert-success">Unmuted. ✅</div>'; document.getElementById('unmute-user').value = ''; document.getElementById('unmute-reason').value = ''; }
-  else { const d = await res.json(); el.innerHTML = '<div class="alert alert-error">' + (d.error || 'Failed') + '</div>'; }
+  webAction(API + '/api/actions/unmute?userId=' + encodeURIComponent(userId) + '&reason=' + encodeURIComponent(reason), 'Unmuted', 'unmute-result', ['unmute-user', 'unmute-reason']);
 }
 
-async function webStrike() {
+function webStrike() {
   const userId = document.getElementById('webstrike-user').value.trim();
   const publicReason = document.getElementById('webstrike-public').value.trim();
   const privateReason = document.getElementById('webstrike-private').value.trim();
   const el = document.getElementById('webstrike-result');
   if (!userId || !publicReason) { el.innerHTML = '<div class="alert alert-error">User ID and public reason required.</div>'; return; }
-  const res = await fetch(API + '/api/actions/strike?userId=' + encodeURIComponent(userId) + '&publicReason=' + encodeURIComponent(publicReason) + '&privateReason=' + encodeURIComponent(privateReason));
-  if (res.ok) { el.innerHTML = '<div class="alert alert-success">Strike issued. ✅</div>'; document.getElementById('webstrike-user').value = ''; document.getElementById('webstrike-public').value = ''; document.getElementById('webstrike-private').value = ''; }
-  else { const d = await res.json(); el.innerHTML = '<div class="alert alert-error">' + (d.error || 'Failed') + '</div>'; }
+  webAction(API + '/api/actions/strike?userId=' + encodeURIComponent(userId) + '&publicReason=' + encodeURIComponent(publicReason) + '&privateReason=' + encodeURIComponent(privateReason), 'Strike issued', 'webstrike-result', ['webstrike-user', 'webstrike-public', 'webstrike-private']);
 }
 
 async function loadVisitors() {

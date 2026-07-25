@@ -677,6 +677,15 @@ app.post('/api/admin/kill-session', isAuthenticated, isAdmin, (req, res) => {
   }
 });
 
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err);
+  if (req.path.startsWith('/api/')) {
+    res.status(500).json({ error: 'Internal server error.' });
+  } else {
+    res.status(500).send('Internal server error.');
+  }
+});
+
 app.get('/LICENSE', (req, res) => {
   res.sendFile(path.join(__dirname, 'LICENSE'));
 });
