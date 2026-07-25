@@ -1,11 +1,28 @@
 const Groq = require('groq-sdk');
+const fs = require('fs');
+const path = require('path');
 
 let groq = null;
+let knowledgeContext = '';
+
+function loadKnowledge() {
+  try {
+    const knowledgePath = path.join(__dirname, '..', 'knowledge.json');
+    if (fs.existsSync(knowledgePath)) {
+      const data = JSON.parse(fs.readFileSync(knowledgePath, 'utf8'));
+      knowledgeContext = `You are ${data.identity.name}, version ${data.identity.version}. ${data.identity.description}.\n\nYour personality: ${data.response_context.personality}\n\nGuidelines:\n- ${data.response_context.guidelines.join('\n- ')}\n\nFAQ:\n${data.response_context.faq.map(f => `Q: ${f.question}\nA: ${f.answer}`).join('\n\n')}`;
+      console.log('Knowledge context loaded.');
+    }
+  } catch (err) {
+    console.error('Failed to load knowledge:', err.message);
+  }
+}
 
 function init() {
   const apiKey = process.env.KEY;
   if (apiKey && apiKey !== '') {
     groq = new Groq({ apiKey });
+    loadKnowledge();
     console.log('Groq AI initialized.');
   } else {
     console.log('No Groq API key set (KEY env var) — AI auto-responses disabled.');
@@ -21,7 +38,7 @@ async function getAutoResponse(userMessage, history = []) {
 
   const systemMessage = {
     role: 'system',
-    content: `You are a helpful support assistant for Jump Up Events. Your role is to help users with their questions about the server, events, and general inquiries.
+    content: knowledgeContext || `You are a helpful support assistant for Jump Up Events. Your role is to help users with their questions about the server, events, and general inquiries.
 
 Guidelines:
 - Be friendly, concise, and helpful.

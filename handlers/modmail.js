@@ -167,6 +167,8 @@ function getTicketByChannel(channelId) {
   for (const [userId, ticket] of activeTickets) {
     if (ticket.channelId === channelId) return { userId, ticket };
   }
+  const entry = Object.entries(Object.fromEntries(activeTickets)).find(([, t]) => t.channelId === channelId);
+  if (entry) return { userId: entry[0], ticket: entry[1] };
   return null;
 }
 
@@ -179,7 +181,7 @@ function rebuildActiveTickets(guild, client, categoryId) {
     if (existing) continue;
     const username = channel.name.replace('ticket-', '');
     const member = guild.members.cache.find(m => m.user.username.toLowerCase().replace(/[^a-z0-9]/g, '') === username);
-    const userId = member ? member.id : null;
+    const userId = member ? member.id : `unknown-${channel.id}`;
     activeTickets.set(userId, { channelId: channel.id, userId, mode: 'human', history: [] });
   }
 }

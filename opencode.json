@@ -1,0 +1,12 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "default_agent": "zen",
+  "model": "deepseek/deepseek-v4-flash-free-max",
+  "agent": {
+    "zen": {
+      "model": "deepseek/deepseek-v4-flash-free-max",
+      "mode": "primary",
+      "description": "Default agent for the Jump Up Events Discord bot project."
+    }
+  }
+}

@@ -415,6 +415,45 @@ tr:hover td {
   margin-top: 4px;
 }
 
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-warning {
+  background: #f39c12;
+  color: white;
+}
+
+.btn-warning:hover {
+  background: #d68910;
+}
+
+.visitor-banner {
+  background: #3a2a1a;
+  border: 1px solid #6a4a2d;
+  color: #d5b595;
+  text-align: center;
+  padding: 8px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.mode-ai {
+  color: #9b59b6;
+  font-weight: 600;
+}
+
+.mode-human {
+  color: #2ecc71;
+  font-weight: 600;
+}
+
+.mode-indicator {
+  font-size: 13px;
+  padding: 4px 0;
+}
+
 @media (max-width: 768px) {
   .cards {
     grid-template-columns: 1fr;

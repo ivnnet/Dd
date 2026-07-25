@@ -11,12 +11,14 @@
 
 <script>
 const API = window.location.origin;
+let LOGO_URL = 'https://media.discordapp.net/attachments/1529062834250715182/1529396105702539414/icon-1.png';
+let CURRENT_USER = null;
 
 async function fetchAPI(path) {
   try {
     const res = await fetch(API + path);
     if (res.status === 401) { renderLogin(); return null; }
-    if (res.status === 403) { renderForbidden(); return null; }
+    if (res.status === 403) { const d = await res.json().catch(() => ({})); renderForbidden(d.error); return null; }
     return await res.json();
   } catch {
     renderLogin();
@@ -25,15 +27,18 @@ async function fetchAPI(path) {
 }
 
 async function init() {
+  const configData = await fetchAPI('/api/config');
+  if (configData) LOGO_URL = configData.logoUrl;
   const me = await fetchAPI('/api/me');
   if (!me) return;
+  CURRENT_USER = me;
   renderDashboard(me);
 }
 
 function renderLogin() {
   document.getElementById('app').innerHTML = `
     <div class="login-prompt">
-      <img src="https://media.discordapp.net/attachments/1529062834250715182/1529396105702539414/icon-1.png" alt="Jump Up Events">
+      <img src="${LOGO_URL}" alt="Jump Up Events">
       <h1>Jump Up Events</h1>
       <p>Staff moderation panel. Log in with your Discord account to manage the server.</p>
       <a href="/auth/discord" class="btn btn-primary">Login with Discord</a>
@@ -41,39 +46,46 @@ function renderLogin() {
   `;
 }
 
-function renderForbidden() {
+function renderForbidden(msg) {
   document.getElementById('app').innerHTML = `
     <div class="login-prompt">
-      <img src="https://media.discordapp.net/attachments/1529062834250715182/1529396105702539414/icon-1.png" alt="Jump Up Events">
+      <img src="${LOGO_URL}" alt="Jump Up Events">
       <h1>Access Denied</h1>
-      <p>You need the admin role in the Jump Up Events server to access this panel.</p>
+      <p>${msg || 'You do not have permission to access this panel.'}</p>
       <a href="/auth/logout" class="btn btn-danger">Log Out</a>
     </div>
   `;
 }
+
+function isVisitor() { return CURRENT_USER && CURRENT_USER.isVisitor; }
+function isOwner() { return CURRENT_USER && CURRENT_USER.isOwner; }
 
 function renderDashboard(me) {
   const avatar = me.avatar
     ? `https://cdn.discordapp.com/avatars/${me.id}/${me.avatar}.png`
     : `https://cdn.discordapp.com/embed/avatars/${me.id % 5}.png`;
 
+  const visitorBanner = isVisitor() ? `<div class="visitor-banner">View-Only Mode — You cannot perform mutations</div>` : '';
+
   document.getElementById('app').innerHTML = `
     <nav class="nav">
       <div class="nav-brand">
-        <img src="https://media.discordapp.net/attachments/1529062834250715182/1529396105702539414/icon-1.png" alt="Jump Up Events">
+        <img src="${LOGO_URL}" alt="Jump Up Events">
         Jump Up Events
       </div>
       <div class="nav-user">
-        <span>${me.username}</span>
+        <span>${me.username} ${isOwner() ? '👑' : ''} ${isVisitor() ? '👁️' : ''}</span>
         <img src="${avatar}" alt="">
         <a href="/auth/logout" class="btn btn-small btn-danger">Logout</a>
       </div>
     </nav>
+    ${visitorBanner}
     <div class="container">
       <div class="tabs">
         <button class="tab active" data-tab="strikes">Strikes</button>
         <button class="tab" data-tab="modmail">Modmail</button>
         <button class="tab" data-tab="actions">Quick Actions</button>
+        ${isOwner() ? '<button class="tab" data-tab="admin">Admin</button>' : ''}
       </div>
 
       <div id="tab-strikes" class="tab-content active">
@@ -92,7 +104,7 @@ function renderDashboard(me) {
               <label>Private Reason (staff only)</label>
               <input type="text" id="strike-private" placeholder="Internal notes">
             </div>
-            <button class="btn btn-primary" onclick="issueStrike()">Issue Strike</button>
+            <button class="btn btn-primary" onclick="issueStrike()" ${isVisitor() ? 'disabled' : ''}>Issue Strike</button>
             <div id="strike-alert" style="margin-top:12px"></div>
           </div>
           <div class="card">
@@ -113,16 +125,18 @@ function renderDashboard(me) {
           <h2 id="conversation-header">Conversation</h2>
           <button class="btn btn-small btn-secondary" onclick="closeConversation()" style="margin-bottom:12px">Back to tickets</button>
           <div id="conversation-messages" class="modmail-messages"></div>
+          <div id="conversation-mode" class="mode-indicator" style="margin-bottom:8px"></div>
           <div class="modmail-input">
             <input type="text" id="conversation-reply-input" placeholder="Type your reply..." onkeydown="if(event.key==='Enter')sendConversationReply()">
-            <button class="btn btn-primary" onclick="sendConversationReply()">Send</button>
-            <button class="btn btn-danger" onclick="confirmConversationClose()">Close Ticket</button>
+            <button class="btn btn-primary" onclick="sendConversationReply()" ${isVisitor() ? 'disabled' : ''}>Send</button>
+            <button class="btn btn-secondary" onclick="toggleTicketMode()" id="toggle-mode-btn" ${isVisitor() ? 'disabled' : ''}>Toggle AI/Human</button>
+            <button class="btn btn-danger" onclick="confirmConversationClose()" ${isVisitor() ? 'disabled' : ''}>Close Ticket</button>
           </div>
         </div>
       </div>
 
       <div id="tab-actions" class="tab-content">
-        <div class="cards">
+        <div class="cards" style="grid-template-columns:1fr">
           <div class="card">
             <h2>Look Up User</h2>
             <div class="form-group">
@@ -133,14 +147,81 @@ function renderDashboard(me) {
             <div id="lookup-result" style="margin-top:12px"></div>
           </div>
           <div class="card">
-            <h2>Quick Links</h2>
-            <p style="color:#9d9daf;margin-bottom:12px;line-height:1.6">
-              Use slash commands in Discord for moderation actions:<br>
-              <code>/mstrike</code> · <code>/mkick</code> · <code>/mban</code> · <code>/mmute</code> · <code>/giveaway</code>
-            </p>
+            <h2>Kick Member</h2>
+            <div class="form-group"><label>User ID</label><input type="text" id="kick-user" placeholder="Discord user ID"></div>
+            <div class="form-group"><label>Reason</label><input type="text" id="kick-reason" placeholder="Reason"></div>
+            <button class="btn btn-danger" onclick="webKick()" ${isVisitor() ? 'disabled' : ''}>Kick</button>
+            <div id="kick-result" style="margin-top:12px"></div>
+          </div>
+          <div class="card">
+            <h2>Ban Member</h2>
+            <div class="form-group"><label>User ID</label><input type="text" id="ban-user" placeholder="Discord user ID"></div>
+            <div class="form-group"><label>Reason</label><input type="text" id="ban-reason" placeholder="Reason"></div>
+            <div class="form-group"><label>Delete Days</label><input type="number" id="ban-days" placeholder="0" value="0" min="0" max="7"></div>
+            <button class="btn btn-danger" onclick="webBan()" ${isVisitor() ? 'disabled' : ''}>Ban</button>
+            <div id="ban-result" style="margin-top:12px"></div>
+          </div>
+          <div class="card">
+            <h2>Unban User</h2>
+            <div class="form-group"><label>User ID</label><input type="text" id="unban-user" placeholder="Discord user ID"></div>
+            <div class="form-group"><label>Reason</label><input type="text" id="unban-reason" placeholder="Reason"></div>
+            <button class="btn btn-primary" onclick="webUnban()" ${isVisitor() ? 'disabled' : ''}>Unban</button>
+            <div id="unban-result" style="margin-top:12px"></div>
+          </div>
+          <div class="card">
+            <h2>Mute (Timeout) Member</h2>
+            <div class="form-group"><label>User ID</label><input type="text" id="mute-user" placeholder="Discord user ID"></div>
+            <div class="form-group"><label>Duration</label><input type="text" id="mute-duration" placeholder="10m, 1h, 7d"></div>
+            <div class="form-group"><label>Reason</label><input type="text" id="mute-reason" placeholder="Reason"></div>
+            <button class="btn btn-warning" onclick="webMute()" ${isVisitor() ? 'disabled' : ''}>Mute</button>
+            <div id="mute-result" style="margin-top:12px"></div>
+          </div>
+          <div class="card">
+            <h2>Unmute Member</h2>
+            <div class="form-group"><label>User ID</label><input type="text" id="unmute-user" placeholder="Discord user ID"></div>
+            <div class="form-group"><label>Reason</label><input type="text" id="unmute-reason" placeholder="Reason"></div>
+            <button class="btn btn-primary" onclick="webUnmute()" ${isVisitor() ? 'disabled' : ''}>Unmute</button>
+            <div id="unmute-result" style="margin-top:12px"></div>
+          </div>
+          <div class="card">
+            <h2>Issue Strike</h2>
+            <div class="form-group"><label>User ID</label><input type="text" id="webstrike-user" placeholder="Discord user ID"></div>
+            <div class="form-group"><label>Public Reason</label><input type="text" id="webstrike-public" placeholder="Public reason"></div>
+            <div class="form-group"><label>Private Reason</label><input type="text" id="webstrike-private" placeholder="Private reason"></div>
+            <button class="btn btn-primary" onclick="webStrike()" ${isVisitor() ? 'disabled' : ''}>Issue Strike</button>
+            <div id="webstrike-result" style="margin-top:12px"></div>
           </div>
         </div>
       </div>
+
+      ${isOwner() ? `
+      <div id="tab-admin" class="tab-content">
+        <div class="cards" style="grid-template-columns:1fr">
+          <div class="card">
+            <h2>Manage Visitors</h2>
+            <div class="form-group">
+              <label>User ID</label>
+              <input type="text" id="visitor-user" placeholder="Discord user ID to add/remove">
+            </div>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-primary" onclick="addVisitor()">Add Visitor</button>
+              <button class="btn btn-danger" onclick="removeVisitor()">Remove Visitor</button>
+            </div>
+            <div id="visitor-result" style="margin-top:12px"></div>
+            <div id="visitor-list" style="margin-top:12px"></div>
+          </div>
+          <div class="card">
+            <h2>Kill User Session</h2>
+            <div class="form-group">
+              <label>User ID to terminate</label>
+              <input type="text" id="kill-user" placeholder="Discord user ID">
+            </div>
+            <button class="btn btn-danger" onclick="killSession()">Terminate Session</button>
+            <div id="kill-result" style="margin-top:12px"></div>
+          </div>
+        </div>
+      </div>
+      ` : ''}
     </div>
   `;
 
@@ -151,6 +232,7 @@ function renderDashboard(me) {
       tab.classList.add('active');
       document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
       if (tab.dataset.tab === 'modmail') loadTickets();
+      if (tab.dataset.tab === 'admin') loadVisitors();
     });
   });
 
@@ -172,10 +254,11 @@ async function loadStrikes() {
       <td>#${s.id}</td>
       <td>${date}</td>
       <td>${s.publicReason}</td>
+      <td>${s.privateReason || '<span style="color:#9d9daf">None</span>'}</td>
     </tr>`;
   }).join('');
   el.innerHTML = `<div class="table-wrap"><table><thead><tr>
-    <th>User</th><th>#</th><th>Date</th><th>Reason</th>
+    <th>User</th><th>#</th><th>Date</th><th>Public Reason</th><th>Private Reason</th>
   </tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
@@ -184,12 +267,10 @@ async function issueStrike() {
   const publicReason = document.getElementById('strike-public').value.trim();
   const privateReason = document.getElementById('strike-private').value.trim();
   const alert = document.getElementById('strike-alert');
-
   if (!userId || !publicReason) {
     alert.innerHTML = '<div class="alert alert-error">User ID and Public Reason are required.</div>';
     return;
   }
-
   try {
     const res = await fetch(API + '/api/strikes', {
       method: 'POST',
@@ -198,7 +279,7 @@ async function issueStrike() {
     });
     const data = await res.json();
     if (res.ok) {
-      alert.innerHTML = `<div class="alert alert-success">Strike #${data.strikeId} issued.</div>`;
+      alert.innerHTML = `<div class="alert alert-success">Strike #${data.strikeId} issued. ✅</div>`;
       document.getElementById('strike-user').value = '';
       document.getElementById('strike-public').value = '';
       document.getElementById('strike-private').value = '';
@@ -214,26 +295,29 @@ async function issueStrike() {
 async function lookupUser() {
   const userId = document.getElementById('lookup-user').value.trim();
   const el = document.getElementById('lookup-result');
-  if (!userId) {
-    el.innerHTML = '<div class="alert alert-error">Enter a user ID.</div>';
-    return;
-  }
-  const data = await fetchAPI('/api/strikes/' + userId);
+  if (!userId) { el.innerHTML = '<div class="alert alert-error">Enter a user ID.</div>'; return; }
+  const data = await fetchAPI('/api/actions/lookup?userId=' + encodeURIComponent(userId));
   if (!data) return;
-  if (data.length === 0) {
-    el.innerHTML = '<div class="alert alert-success">No strikes for this user.</div>';
+  if (!data.user && !data.member) {
+    el.innerHTML = '<div class="alert alert-error">User not found.</div>';
     return;
   }
-  const rows = data.map(s =>
-    `<tr><td>#${s.id}</td><td>${new Date(s.timestamp).toLocaleDateString()}</td><td>${s.publicReason}</td></tr>`
-  ).join('');
-  el.innerHTML = `<div class="table-wrap"><table><thead><tr>
-    <th>#</th><th>Date</th><th>Reason</th>
-  </tr></thead><tbody>${rows}</tbody></table></div>`;
+  let html = '<div class="table-wrap"><table><thead><tr><th>Field</th><th>Value</th></tr></thead><tbody>';
+  if (data.user) {
+    html += `<tr><td>Username</td><td>${data.user.username}</td></tr>`;
+    html += `<tr><td>ID</td><td>${data.user.id}</td></tr>`;
+    if (data.member) {
+      const roles = data.member.roles ? data.member.roles.join(', ') : 'None';
+      html += `<tr><td>Roles</td><td>${roles}</td></tr>`;
+      html += `<tr><td>Joined</td><td>${data.member.joined_at || 'Unknown'}</td></tr>`;
+    }
+  }
+  html += '</tbody></table></div>';
+  el.innerHTML = html;
 }
 
 async function loadTickets() {
-  const data = await fetchAPI('/api/tickets');
+  const data = await fetchAPI('/api/modmail/tickets');
   if (!data) return;
   const el = document.getElementById('ticket-list');
   if (data.length === 0) {
@@ -241,32 +325,61 @@ async function loadTickets() {
     return;
   }
   const rows = data.map(t => `
-    <div class="ticket-item" style="cursor:pointer" onclick="openConversation('${t.userId}')">
+    <div class="ticket-item" style="cursor:pointer" onclick="openConversation('${t.channelId}')">
       <div class="ticket-info">
-        <strong>User:</strong> ${t.userId} &middot; <strong>Mode:</strong> ${t.mode}
+        <strong>User:</strong> ${t.userId || t.userName} &middot; <strong>Mode:</strong> <span class="mode-${t.mode}">${t.mode.toUpperCase()}</span> &middot; ${t.lastMessage ? `<span style="color:#9d9daf">${escapeHtml(t.lastMessage.slice(0, 60))}</span>` : '<span style="color:#9d9daf;font-style:italic">No messages yet</span>'}
       </div>
     </div>
   `).join('');
   el.innerHTML = `<div class="ticket-list">${rows}</div>`;
 }
 
+let activeConversationChannelId = null;
 let activeConversationUserId = null;
 
-async function openConversation(userId) {
-  activeConversationUserId = userId;
+async function openConversation(channelId) {
+  activeConversationChannelId = channelId;
   document.getElementById('modmail-conversation').style.display = 'block';
-  document.getElementById('conversation-header').textContent = 'Conversation — ' + userId;
+  document.getElementById('conversation-header').textContent = 'Conversation';
+  await loadConversationMode();
   await loadConversationMessages();
 }
 
 function closeConversation() {
+  activeConversationChannelId = null;
   activeConversationUserId = null;
   document.getElementById('modmail-conversation').style.display = 'none';
 }
 
+async function loadConversationMode() {
+  if (!activeConversationChannelId) return;
+  const data = await fetchAPI('/api/modmail/tickets/' + activeConversationChannelId + '/user');
+  if (!data) return;
+  activeConversationUserId = data.userId;
+  document.getElementById('conversation-header').textContent = 'Conversation — ' + (data.userId || 'Unknown');
+  document.getElementById('conversation-mode').innerHTML = `<span class="mode-${data.mode}">Mode: ${data.mode.toUpperCase()}</span>`;
+  document.getElementById('toggle-mode-btn').textContent = data.mode === 'ai' ? 'Switch to Human' : 'Switch to AI';
+}
+
+async function toggleTicketMode() {
+  if (!activeConversationChannelId) return;
+  const data = await fetchAPI('/api/modmail/tickets/' + activeConversationChannelId + '/user');
+  if (!data) return;
+  const newMode = data.mode === 'ai' ? 'human' : 'ai';
+  const res = await fetch(API + '/api/modmail/tickets/' + activeConversationChannelId + '/toggle-mode', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode: newMode }),
+  });
+  if (res.ok) {
+    await loadConversationMode();
+    showAlert('conversation-messages', 'success', `Switched to ${newMode.toUpperCase()} mode. ✅`);
+  }
+}
+
 async function loadConversationMessages() {
-  if (!activeConversationUserId) return;
-  const data = await fetchAPI('/api/tickets/' + activeConversationUserId + '/messages');
+  if (!activeConversationChannelId) return;
+  const data = await fetchAPI('/api/modmail/tickets/' + activeConversationChannelId + '/messages');
   if (!data) {
     document.getElementById('conversation-messages').innerHTML = '<p style="color:#9d9daf">Could not load messages.</p>';
     return;
@@ -287,27 +400,156 @@ async function loadConversationMessages() {
 async function sendConversationReply() {
   const input = document.getElementById('conversation-reply-input');
   const message = input.value.trim();
-  if (!message || !activeConversationUserId) return;
-  const res = await fetch(API + '/api/tickets/' + activeConversationUserId + '/reply', {
+  if (!message || !activeConversationChannelId) return;
+  const res = await fetch(API + '/api/modmail/tickets/' + activeConversationChannelId + '/reply', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ content: message, userId: activeConversationUserId }),
   });
   if (res.ok) {
     input.value = '';
     await loadConversationMessages();
     loadTickets();
+  } else {
+    const data = await res.json().catch(() => ({}));
+    showAlert('conversation-messages', 'error', data.error || 'Failed to send message.');
   }
 }
 
 async function confirmConversationClose() {
   if (!confirm('Close this ticket?')) return;
-  if (!activeConversationUserId) return;
-  const res = await fetch(API + '/api/tickets/' + activeConversationUserId + '/close', { method: 'POST' });
+  if (!activeConversationChannelId) return;
+  const res = await fetch(API + '/api/modmail/tickets/' + activeConversationChannelId + '/close', { method: 'POST' });
   if (res.ok) {
     closeConversation();
     loadTickets();
   }
+}
+
+async function webKick() {
+  const userId = document.getElementById('kick-user').value.trim();
+  const reason = document.getElementById('kick-reason').value.trim();
+  const el = document.getElementById('kick-result');
+  if (!userId) { el.innerHTML = '<div class="alert alert-error">User ID required.</div>'; return; }
+  const res = await fetch(API + '/api/actions/kick?userId=' + encodeURIComponent(userId) + '&reason=' + encodeURIComponent(reason));
+  if (res.ok) { el.innerHTML = '<div class="alert alert-success">Kicked. ✅</div>'; document.getElementById('kick-user').value = ''; document.getElementById('kick-reason').value = ''; }
+  else { const d = await res.json(); el.innerHTML = '<div class="alert alert-error">' + (d.error || 'Failed') + '</div>'; }
+}
+
+async function webBan() {
+  const userId = document.getElementById('ban-user').value.trim();
+  const reason = document.getElementById('ban-reason').value.trim();
+  const deleteDays = document.getElementById('ban-days').value;
+  const el = document.getElementById('ban-result');
+  if (!userId) { el.innerHTML = '<div class="alert alert-error">User ID required.</div>'; return; }
+  const res = await fetch(API + '/api/actions/ban?userId=' + encodeURIComponent(userId) + '&reason=' + encodeURIComponent(reason) + '&deleteDays=' + encodeURIComponent(deleteDays));
+  if (res.ok) { el.innerHTML = '<div class="alert alert-success">Banned. ✅</div>'; document.getElementById('ban-user').value = ''; document.getElementById('ban-reason').value = ''; }
+  else { const d = await res.json(); el.innerHTML = '<div class="alert alert-error">' + (d.error || 'Failed') + '</div>'; }
+}
+
+async function webUnban() {
+  const userId = document.getElementById('unban-user').value.trim();
+  const reason = document.getElementById('unban-reason').value.trim();
+  const el = document.getElementById('unban-result');
+  if (!userId) { el.innerHTML = '<div class="alert alert-error">User ID required.</div>'; return; }
+  const res = await fetch(API + '/api/actions/unban?userId=' + encodeURIComponent(userId) + '&reason=' + encodeURIComponent(reason));
+  if (res.ok) { el.innerHTML = '<div class="alert alert-success">Unbanned. ✅</div>'; document.getElementById('unban-user').value = ''; document.getElementById('unban-reason').value = ''; }
+  else { const d = await res.json(); el.innerHTML = '<div class="alert alert-error">' + (d.error || 'Failed') + '</div>'; }
+}
+
+async function webMute() {
+  const userId = document.getElementById('mute-user').value.trim();
+  const duration = document.getElementById('mute-duration').value.trim();
+  const reason = document.getElementById('mute-reason').value.trim();
+  const el = document.getElementById('mute-result');
+  if (!userId || !duration) { el.innerHTML = '<div class="alert alert-error">User ID and duration required.</div>'; return; }
+  const res = await fetch(API + '/api/actions/mute?userId=' + encodeURIComponent(userId) + '&duration=' + encodeURIComponent(duration) + '&reason=' + encodeURIComponent(reason));
+  if (res.ok) { el.innerHTML = '<div class="alert alert-success">Muted. ✅</div>'; document.getElementById('mute-user').value = ''; document.getElementById('mute-duration').value = ''; document.getElementById('mute-reason').value = ''; }
+  else { const d = await res.json(); el.innerHTML = '<div class="alert alert-error">' + (d.error || 'Failed') + '</div>'; }
+}
+
+async function webUnmute() {
+  const userId = document.getElementById('unmute-user').value.trim();
+  const reason = document.getElementById('unmute-reason').value.trim();
+  const el = document.getElementById('unmute-result');
+  if (!userId) { el.innerHTML = '<div class="alert alert-error">User ID required.</div>'; return; }
+  const res = await fetch(API + '/api/actions/unmute?userId=' + encodeURIComponent(userId) + '&reason=' + encodeURIComponent(reason));
+  if (res.ok) { el.innerHTML = '<div class="alert alert-success">Unmuted. ✅</div>'; document.getElementById('unmute-user').value = ''; document.getElementById('unmute-reason').value = ''; }
+  else { const d = await res.json(); el.innerHTML = '<div class="alert alert-error">' + (d.error || 'Failed') + '</div>'; }
+}
+
+async function webStrike() {
+  const userId = document.getElementById('webstrike-user').value.trim();
+  const publicReason = document.getElementById('webstrike-public').value.trim();
+  const privateReason = document.getElementById('webstrike-private').value.trim();
+  const el = document.getElementById('webstrike-result');
+  if (!userId || !publicReason) { el.innerHTML = '<div class="alert alert-error">User ID and public reason required.</div>'; return; }
+  const res = await fetch(API + '/api/actions/strike?userId=' + encodeURIComponent(userId) + '&publicReason=' + encodeURIComponent(publicReason) + '&privateReason=' + encodeURIComponent(privateReason));
+  if (res.ok) { el.innerHTML = '<div class="alert alert-success">Strike issued. ✅</div>'; document.getElementById('webstrike-user').value = ''; document.getElementById('webstrike-public').value = ''; document.getElementById('webstrike-private').value = ''; }
+  else { const d = await res.json(); el.innerHTML = '<div class="alert alert-error">' + (d.error || 'Failed') + '</div>'; }
+}
+
+async function loadVisitors() {
+  const data = await fetchAPI('/api/admin/visitors');
+  if (!data) return;
+  const el = document.getElementById('visitor-list');
+  if (data.visitors.length === 0) {
+    el.innerHTML = '<p style="color:#9d9daf">No visitors configured.</p>';
+  } else {
+    el.innerHTML = '<div class="table-wrap"><table><thead><tr><th>Visitor User IDs</th></tr></thead><tbody>' +
+      data.visitors.map(v => `<tr><td>${v}</td></tr>`).join('') +
+      '</tbody></table></div>';
+  }
+}
+
+async function addVisitor() {
+  const userId = document.getElementById('visitor-user').value.trim();
+  const el = document.getElementById('visitor-result');
+  if (!userId) { el.innerHTML = '<div class="alert alert-error">User ID required.</div>'; return; }
+  const res = await fetch(API + '/api/admin/visitors', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId, action: 'add' }),
+  });
+  if (res.ok) { el.innerHTML = '<div class="alert alert-success">Visitor added. ✅</div>'; document.getElementById('visitor-user').value = ''; loadVisitors(); }
+  else { const d = await res.json(); el.innerHTML = '<div class="alert alert-error">' + (d.error || 'Failed') + '</div>'; }
+}
+
+async function removeVisitor() {
+  const userId = document.getElementById('visitor-user').value.trim();
+  const el = document.getElementById('visitor-result');
+  if (!userId) { el.innerHTML = '<div class="alert alert-error">User ID required.</div>'; return; }
+  const res = await fetch(API + '/api/admin/visitors', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId, action: 'remove' }),
+  });
+  if (res.ok) { el.innerHTML = '<div class="alert alert-success">Visitor removed. ✅</div>'; document.getElementById('visitor-user').value = ''; loadVisitors(); }
+  else { const d = await res.json(); el.innerHTML = '<div class="alert alert-error">' + (d.error || 'Failed') + '</div>'; }
+}
+
+async function killSession() {
+  const userId = document.getElementById('kill-user').value.trim();
+  const el = document.getElementById('kill-result');
+  if (!userId) { el.innerHTML = '<div class="alert alert-error">User ID required.</div>'; return; }
+  if (!confirm('Terminate all sessions for user ' + userId + '?')) return;
+  const res = await fetch(API + '/api/admin/kill-session', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId }),
+  });
+  if (res.ok) { el.innerHTML = '<div class="alert alert-success">Session terminated. ✅</div>'; document.getElementById('kill-user').value = ''; }
+  else { const d = await res.json(); el.innerHTML = '<div class="alert alert-error">' + (d.error || 'Failed') + '</div>'; }
+}
+
+function showAlert(id, type, msg) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const div = document.createElement('div');
+  div.className = 'alert alert-' + type;
+  div.textContent = msg;
+  el.prepend(div);
+  setTimeout(() => div.remove(), 4000);
 }
 
 function escapeHtml(str) {

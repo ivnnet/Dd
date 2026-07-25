@@ -2,10 +2,19 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('
 const { createTicket, getActiveTicket, setActiveTicket, getTicketByChannel } = require('../handlers/modmail');
 const groq = require('../handlers/groq');
 
+const processedMessages = new Set();
+
 module.exports = {
   name: 'messageCreate',
   async execute(message, client) {
     if (message.author.bot) return;
+
+    if (processedMessages.has(message.id)) return;
+    processedMessages.add(message.id);
+    if (processedMessages.size > 1000) {
+      const first = processedMessages.values().next().value;
+      processedMessages.delete(first);
+    }
 
     // Handle DM → modmail ticket
     if (message.channel.type === 1) {
@@ -29,7 +38,8 @@ module.exports = {
         .setDescription(message.content)
         .setTimestamp();
 
-      await channel.send({ embeds: [embed] });
+      const sent = await channel.send({ embeds: [embed] });
+      try { await sent.react('✅'); } catch {}
 
       if (ticket.mode === 'ai' && groq.isReady()) {
         const aiReply = await groq.getAutoResponse(message.content, ticket.history);
@@ -54,8 +64,12 @@ module.exports = {
             .setFooter({ text: 'AI-powered response' })
             .setTimestamp();
 
-          await message.author.send({ embeds: [aiEmbed], components: [row] });
+          const aiSent = await message.author.send({ embeds: [aiEmbed], components: [row] });
+          try { await aiSent.react('✅'); } catch {}
         }
+      } else if (ticket.mode === 'ai' && !groq.isReady()) {
+        ticket.mode = 'human';
+        setActiveTicket(message.author.id, ticket);
       }
 
       return;
@@ -76,10 +90,13 @@ module.exports = {
 
         try {
           const user = await client.users.fetch(found.ticket.userId);
-          await user.send({ embeds: [embed] });
+          const dmSent = await user.send({ embeds: [embed] });
+          try { await dmSent.react('✅'); } catch {}
         } catch {
           // DMs closed
         }
+
+        try { await message.react('✅'); } catch {}
       }
     }
   },
