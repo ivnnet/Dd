@@ -22,5 +22,10 @@ module.exports = {
     }
     embed.setTimestamp();
     await sendLog(member.guild, client, embed);
+    client.auditLog.logAction('member_join', {
+      userId: member.user.id, userTag: member.user.tag,
+      guildId: member.guild.id,
+      details: { accountCreated: member.user.createdTimestamp, memberCount: member.guild.memberCount, invite: usedInvite?.url || null },
+    });
   },
 };

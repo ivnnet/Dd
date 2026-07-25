@@ -78,6 +78,13 @@ const commands = [
     .addStringOption(option => option.setName('duration').setDescription('Duration (e.g. 1h, 24h, 7d)').setRequired(true))
     .addIntegerOption(option => option.setName('winners').setDescription('Number of winners').setRequired(false))
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageEvents),
+
+  new SlashCommandBuilder()
+    .setName('maudit')
+    .setDescription('View audit log history for a user')
+    .addUserOption(option => option.setName('target').setDescription('The member to look up').setRequired(true))
+    .addStringOption(option => option.setName('action').setDescription('Filter by action type (e.g. ban, kick, mute)').setRequired(false))
+    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers),
 ];
 
 const rest = new REST({ version: '10' }).setToken(config.token);

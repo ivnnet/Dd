@@ -16,5 +16,9 @@ module.exports = {
       .setDescription(changes.join('\n'))
       .setTimestamp();
     await sendLog(newGuild, client, embed);
+    client.auditLog.logAction('guild_update', {
+      guildId: newGuild.id,
+      details: { changes },
+    });
   },
 };

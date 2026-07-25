@@ -39,6 +39,12 @@ module.exports = {
       .setTimestamp();
 
     await sendLog(interaction.guild, interaction.client, logEmbed);
+    interaction.client.auditLog.logAction('strike_remove', {
+      userId: target.id, userTag: target.tag,
+      guildId: interaction.guild.id,
+      moderatorId: interaction.user.id, moderatorTag: interaction.user.tag,
+      reason: '', details: { strikeId, source: 'command' },
+    });
 
     return interaction.reply({ content: `Removed Strike #${strikeId} from ${target.tag}.`, ephemeral: true });
   },

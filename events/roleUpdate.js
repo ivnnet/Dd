@@ -20,5 +20,9 @@ module.exports = {
       )
       .setTimestamp();
     await sendLog(newRole.guild, client, embed);
+    client.auditLog.logAction('role_update', {
+      guildId: newRole.guild.id,
+      details: { roleName: newRole.name, roleId: newRole.id, changes },
+    });
   },
 };

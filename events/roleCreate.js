@@ -16,5 +16,9 @@ module.exports = {
       )
       .setTimestamp();
     await sendLog(role.guild, client, embed);
+    client.auditLog.logAction('role_create', {
+      guildId: role.guild.id,
+      details: { roleName: role.name, roleId: role.id, roleColor: role.hexColor, createdBy: executor ? executor.tag : 'Unknown' },
+    });
   },
 };

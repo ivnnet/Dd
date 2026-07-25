@@ -18,5 +18,9 @@ module.exports = {
       )
       .setTimestamp();
     await sendLog(channel.guild, client, embed);
+    client.auditLog.logAction('channel_create', {
+      guildId: channel.guild.id,
+      details: { channelName: channel.name, channelId: channel.id, channelType: channel.type, parentName: channel.parent?.name || 'None' },
+    });
   },
 };

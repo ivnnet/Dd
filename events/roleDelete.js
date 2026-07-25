@@ -1,6 +1,8 @@
 const { EmbedBuilder, AuditLogEvent } = require('discord.js');
 const { sendLog, getExecutor, formatExecutor } = require('../handlers/logger');
 
+
+
 module.exports = {
   name: 'roleDelete',
   async execute(role, client) {
@@ -16,5 +18,9 @@ module.exports = {
       )
       .setTimestamp();
     await sendLog(role.guild, client, embed);
+    client.auditLog.logAction('role_delete', {
+      guildId: role.guild.id,
+      details: { roleName: role.name, roleId: role.id, deletedBy: executor ? executor.tag : 'Unknown' },
+    });
   },
 };

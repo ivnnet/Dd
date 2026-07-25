@@ -30,6 +30,12 @@ module.exports = {
           )
           .setTimestamp();
         await sendLog(newMember.guild, client, embed);
+        client.auditLog.logAction('role_add', {
+          userId: newMember.id, userTag: newMember.user.tag,
+          guildId: newMember.guild.id,
+          moderatorId: executor?.id || '',
+          details: { roles: addedRoles.map(r => r.name), roleIds: addedRoles.map(r => r.id) },
+        });
       }
 
       if (removedRoles.size > 0) {
@@ -43,6 +49,12 @@ module.exports = {
           )
           .setTimestamp();
         await sendLog(newMember.guild, client, embed);
+        client.auditLog.logAction('role_remove', {
+          userId: newMember.id, userTag: newMember.user.tag,
+          guildId: newMember.guild.id,
+          moderatorId: executor?.id || '',
+          details: { roles: removedRoles.map(r => r.name), roleIds: removedRoles.map(r => r.id) },
+        });
       }
     } catch {}
   },

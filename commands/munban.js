@@ -39,6 +39,12 @@ module.exports = {
         .setTimestamp();
 
       await sendLog(interaction.guild, interaction.client, logEmbed);
+      interaction.client.auditLog.logAction('unban', {
+        userId, userTag: banned.user.tag,
+        guildId: interaction.guild.id,
+        moderatorId: interaction.user.id, moderatorTag: interaction.user.tag,
+        reason, details: { source: 'command' },
+      });
 
       return interaction.reply({ content: `Unbanned ${banned.user.tag}.`, ephemeral: true });
     } catch {

@@ -17,5 +17,10 @@ module.exports = {
       )
       .setTimestamp();
     await sendLog(member.guild, client, embed);
+    client.auditLog.logAction('member_leave', {
+      userId: member.user.id, userTag: member.user.tag,
+      guildId: member.guild.id,
+      details: { joinedAt: member.joinedTimestamp, memberCount: member.guild.memberCount, roles: member.roles.cache.filter(r => r.id !== member.guild.id).map(r => r.name) },
+    });
   },
 };

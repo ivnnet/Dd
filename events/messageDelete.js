@@ -61,5 +61,10 @@ module.exports = {
     }
 
     await sendLog(message.guild, client, embed);
+    client.auditLog.logAction('message_delete', {
+      userId: authorId, userTag: authorName,
+      guildId: message.guild.id,
+      details: { channelName, content: content.slice(0, 500), deletedBy: executorName || 'self', messageId: message.id },
+    });
   },
 };

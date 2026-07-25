@@ -84,6 +84,8 @@ function renderDashboard(me) {
         <button class="tab active" data-tab="strikes">Strikes</button>
         <button class="tab" data-tab="modmail">Modmail</button>
         <button class="tab" data-tab="actions">Quick Actions</button>
+        <button class="tab" data-tab="audit">Audit Log</button>
+        <button class="tab" data-tab="transcripts">Transcripts</button>
         ${isOwner() ? '<button class="tab" data-tab="admin">Admin</button>' : ''}
       </div>
 
@@ -193,6 +195,64 @@ function renderDashboard(me) {
         </div>
       </div>
 
+      <div id="tab-audit" class="tab-content">
+        <div class="cards" style="grid-template-columns:1fr">
+          <div class="card">
+            <h2>Search Audit Log</h2>
+            <div class="form-group">
+              <label>User ID</label>
+              <input type="text" id="audit-user" placeholder="Discord user ID (leave empty for all)">
+            </div>
+            <div class="form-group">
+              <label>Action Filter</label>
+              <select id="audit-action">
+                <option value="">All actions</option>
+                <option value="ban">Ban</option>
+                <option value="unban">Unban</option>
+                <option value="kick">Kick</option>
+                <option value="mute">Mute</option>
+                <option value="unmute">Unmute</option>
+                <option value="strike">Strike</option>
+                <option value="strike_remove">Strike Remove</option>
+                <option value="ticket_closed">Ticket Closed</option>
+                <option value="message_delete">Message Deleted</option>
+                <option value="bulk_delete">Bulk Delete</option>
+                <option value="role_add">Role Added</option>
+                <option value="role_remove">Role Removed</option>
+                <option value="role_create">Role Created</option>
+                <option value="role_delete">Role Deleted</option>
+                <option value="role_update">Role Updated</option>
+                <option value="channel_create">Channel Created</option>
+                <option value="channel_delete">Channel Deleted</option>
+                <option value="channel_update">Channel Updated</option>
+                <option value="member_join">Member Joined</option>
+                <option value="member_leave">Member Left</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Max Results</label>
+              <input type="number" id="audit-limit" value="50" min="1" max="200">
+            </div>
+            <button class="btn btn-primary" onclick="searchAudit()">Search</button>
+            <div id="audit-result" style="margin-top:12px"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="tab-transcripts" class="tab-content">
+        <div class="cards" style="grid-template-columns:1fr">
+          <div class="card">
+            <h2>Ticket Transcripts</h2>
+            <div class="form-group">
+              <label>Search by User ID</label>
+              <input type="text" id="transcript-user" placeholder="Discord user ID (leave empty for all)">
+            </div>
+            <button class="btn btn-primary" onclick="loadTranscripts()">Search</button>
+            <div id="transcript-list" style="margin-top:12px"><p style="color:#9d9daf">Click search to load transcripts.</p></div>
+          </div>
+        </div>
+      </div>
+
       ${isOwner() ? `
       <div id="tab-admin" class="tab-content">
         <div class="cards" style="grid-template-columns:1fr">
@@ -232,6 +292,8 @@ function renderDashboard(me) {
       document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
       if (tab.dataset.tab === 'modmail') loadTickets();
       if (tab.dataset.tab === 'admin') loadVisitors();
+      if (tab.dataset.tab === 'audit') searchAudit();
+      if (tab.dataset.tab === 'transcripts') loadTranscripts();
     });
   });
 
@@ -544,6 +606,75 @@ async function killSession() {
   });
   if (res.ok) { el.innerHTML = '<div class="alert alert-success">Session terminated. ✅</div>'; document.getElementById('kill-user').value = ''; }
   else { const d = await res.json(); el.innerHTML = '<div class="alert alert-error">' + (d.error || 'Failed') + '</div>'; }
+}
+
+async function searchAudit() {
+  const userId = document.getElementById('audit-user').value.trim();
+  const action = document.getElementById('audit-action').value;
+  const limit = document.getElementById('audit-limit').value || 50;
+  const el = document.getElementById('audit-result');
+
+  let url = API + '/api/audit?limit=' + limit;
+  if (userId) url += '&userId=' + encodeURIComponent(userId);
+  if (action) url += '&action=' + encodeURIComponent(action);
+
+  const data = await fetchAPI(url);
+  if (!data) return;
+
+  if (data.length === 0) {
+    el.innerHTML = '<p style="color:#9d9daf">No audit log entries found.</p>';
+    return;
+  }
+
+  const rows = data.map(e => {
+    const time = new Date(e.timestamp).toLocaleString();
+    const details = e.details ? Object.entries(e.details).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join(', ') : '';
+    const transcriptLink = e.details?.transcriptId ? ` <a href="/transcripts/${e.details.transcriptId}" target="_blank" class="btn btn-small btn-primary">View Transcript</a>` : '';
+    return `<tr>
+      <td>${time}</td>
+      <td><span class="mode-${e.action}">${e.action}</span></td>
+      <td>${e.userTag || e.userId || '-'}</td>
+      <td>${e.moderatorTag || e.moderatorId || '-'}</td>
+      <td>${e.reason || '-'}</td>
+      <td style="font-size:11px;color:#9d9daf">${details}${transcriptLink}</td>
+    </tr>`;
+  }).join('');
+
+  el.innerHTML = `<div class="table-wrap"><table><thead><tr>
+    <th>Time</th><th>Action</th><th>User</th><th>Moderator</th><th>Reason</th><th>Details</th>
+  </tr></thead><tbody>${rows}</tbody></table></div>
+  <p style="color:#9d9daf;margin-top:8px">Showing ${data.length} entries</p>`;
+}
+
+async function loadTranscripts() {
+  const userId = document.getElementById('transcript-user').value.trim();
+  const el = document.getElementById('transcript-list');
+
+  let url = API + '/api/audit?action=ticket_closed&limit=50';
+  if (userId) url += '&userId=' + encodeURIComponent(userId);
+
+  const data = await fetchAPI(url);
+  if (!data) return;
+
+  if (data.length === 0) {
+    el.innerHTML = '<p style="color:#9d9daf">No transcripts found.</p>';
+    return;
+  }
+
+  const rows = data.map(e => {
+    const time = new Date(e.timestamp).toLocaleString();
+    const tid = e.details?.transcriptId || '';
+    return `<tr>
+      <td>${time}</td>
+      <td>${e.userTag || e.userId || '-'}</td>
+      <td>${e.details?.channelId || '-'}</td>
+      <td>${tid ? `<a href="/transcripts/${tid}" target="_blank" class="btn btn-small btn-primary">View</a>` : '-'}</td>
+    </tr>`;
+  }).join('');
+
+  el.innerHTML = `<div class="table-wrap"><table><thead><tr>
+    <th>Closed At</th><th>User</th><th>Channel</th><th>Transcript</th>
+  </tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 function showAlert(id, type, msg) {

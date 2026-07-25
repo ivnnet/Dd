@@ -18,7 +18,7 @@ module.exports = {
       return interaction.reply({ content: 'I cannot strike this user.', ephemeral: true });
     }
 
-    const strikeId = interaction.client.strikes.addStrike(target.id, interaction.guild.id, interaction.user.id, publicReason, privateReason);
+    const strikeId = await interaction.client.strikes.addStrike(target.id, interaction.guild.id, interaction.user.id, publicReason, privateReason);
 
     const strikeEmbed = new EmbedBuilder()
       .setColor(0xe74c3c)
@@ -49,6 +49,12 @@ module.exports = {
       .setTimestamp();
 
     await sendLog(interaction.guild, interaction.client, logEmbed);
+    interaction.client.auditLog.logAction('strike', {
+      userId: target.id, userTag: target.user.tag,
+      guildId: interaction.guild.id,
+      moderatorId: interaction.user.id, moderatorTag: interaction.user.tag,
+      reason: publicReason, details: { privateReason, strikeId, source: 'command' },
+    });
 
     return interaction.reply({ content: `Struck ${target.user.tag} with Strike #${strikeId}.`, ephemeral: true });
   },

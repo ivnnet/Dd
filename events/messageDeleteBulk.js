@@ -16,5 +16,9 @@ module.exports = {
       )
       .setTimestamp();
     await sendLog(first.guild, client, embed);
+    client.auditLog.logAction('bulk_delete', {
+      guildId: first.guild.id,
+      details: { channelName: first.channel?.name || 'unknown', count: messages.size, channelId: first.channel?.id },
+    });
   },
 };

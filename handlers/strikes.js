@@ -1,54 +1,55 @@
-const fs = require('fs');
-const path = require('path');
-const strikesPath = path.join(__dirname, '..', 'data', 'strikes.json');
+const Strike = require('../models/Strike');
+const db = require('./database');
 
-function read() {
+async function addStrike(userId, guildId, moderatorId, publicReason, privateReason) {
+  if (!db.isReady()) return null;
   try {
-    return JSON.parse(fs.readFileSync(strikesPath, 'utf8'));
+    const userStrikes = await Strike.find({ userId, guildId }).sort({ strikeId: 1 });
+    const strikeId = userStrikes.length > 0 ? userStrikes[userStrikes.length - 1].strikeId + 1 : 1;
+    const strike = new Strike({ strikeId, userId, guildId, moderatorId, publicReason, privateReason });
+    await strike.save();
+    return strikeId;
+  } catch (err) {
+    console.error('addStrike error:', err);
+    return null;
+  }
+}
+
+async function removeStrike(userId, guildId, strikeId) {
+  if (!db.isReady()) return false;
+  try {
+    const result = await Strike.deleteOne({ userId, guildId, strikeId });
+    if (result.deletedCount === 0) return false;
+    const remaining = await Strike.find({ userId, guildId }).sort({ strikeId: 1 });
+    for (let i = 0; i < remaining.length; i++) {
+      if (remaining[i].strikeId !== i + 1) {
+        await Strike.updateOne({ _id: remaining[i]._id }, { strikeId: i + 1 });
+      }
+    }
+    return true;
+  } catch (err) {
+    console.error('removeStrike error:', err);
+    return false;
+  }
+}
+
+async function getStrikes(userId, guildId) {
+  if (!db.isReady()) return [];
+  try {
+    return await Strike.find({ userId, guildId }).sort({ strikeId: 1 }).lean();
   } catch {
     return [];
   }
 }
 
-function write(data) {
-  fs.writeFileSync(strikesPath, JSON.stringify(data, null, 2));
-}
-
-function addStrike(userId, guildId, moderatorId, publicReason, privateReason) {
-  const strikes = read();
-  const userStrikes = strikes.filter(s => s.userId === userId && s.guildId === guildId);
-  const strikeId = userStrikes.length + 1;
-  strikes.push({
-    id: strikeId,
-    userId,
-    guildId,
-    moderatorId,
-    publicReason,
-    privateReason: privateReason || '',
-    timestamp: new Date().toISOString(),
-  });
-  write(strikes);
-  return strikeId;
-}
-
-function removeStrike(userId, guildId, strikeId) {
-  const strikes = read();
-  const idx = strikes.findIndex(s => s.userId === userId && s.guildId === guildId && s.id === strikeId);
-  if (idx === -1) return false;
-  strikes.splice(idx, 1);
-  const userStrikes = strikes.filter(s => s.userId === userId && s.guildId === guildId);
-  userStrikes.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
-  userStrikes.forEach((s, i) => s.id = i + 1);
-  write(strikes);
-  return true;
-}
-
-function getStrikes(userId, guildId) {
-  return read().filter(s => s.userId === userId && s.guildId === guildId);
-}
-
-function getAllStrikes() {
-  return read();
+async function getAllStrikes(guildId) {
+  if (!db.isReady()) return [];
+  try {
+    const filter = guildId ? { guildId } : {};
+    return await Strike.find(filter).sort({ timestamp: -1 }).lean();
+  } catch {
+    return [];
+  }
 }
 
 module.exports = { addStrike, removeStrike, getStrikes, getAllStrikes };

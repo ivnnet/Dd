@@ -29,6 +29,8 @@ const client = new Client({
 client.commands = new Collection();
 client.config = config;
 client.strikes = require('./handlers/strikes');
+client.database = require('./handlers/database');
+client.auditLog = require('./handlers/auditLog');
 require('./handlers/groq').init();
 
 const commandFiles = fs.readdirSync('./commands').filter(f => f.endsWith('.js'));
@@ -48,6 +50,10 @@ for (const file of eventFiles) {
 }
 
 client.login(config.token);
+
+client.database.connect().then(connected => {
+  if (!connected) console.log('Running without database - strikes/audit/transcripts unavailable');
+});
 
 require('./server');
 

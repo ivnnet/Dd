@@ -81,13 +81,36 @@ async function closeTicket(userId, guild, client) {
 
   const channel = guild.channels.cache.get(ticket.channelId);
   if (channel) {
+    try {
+      const db = require('./database');
+      if (db.isReady()) {
+        const allMsgs = await channel.messages.fetch({ limit: 100 });
+        const Transcript = require('../models/Transcript');
+        const user = await client.users.fetch(userId).catch(() => null);
+        const transcript = new Transcript({
+          ticketId: ticket.channelId,
+          userId,
+          userTag: user ? user.tag : userId,
+          channelId: ticket.channelId,
+          channelName: channel.name,
+          messages: allMsgs.reverse().map(m => ({
+            role: m.author.bot ? 'assistant' : 'user',
+            content: m.content || (m.embeds?.[0]?.description || '(no content)'),
+            timestamp: m.createdAt,
+          })),
+        });
+        await transcript.save();
+        client.auditLog.logAction('ticket_closed', {
+          userId, guildId: guild.id,
+          details: { channelId: ticket.channelId, transcriptId: transcript._id.toString(), source: 'auto' },
+        });
+      }
+    } catch {}
     await channel.send('This ticket is now closed. The channel will be deleted shortly.');
     setTimeout(async () => {
       try {
         await channel.delete();
-      } catch {
-        // already deleted
-      }
+      } catch {}
     }, 5000);
   }
 

@@ -16,5 +16,9 @@ module.exports = {
       )
       .setTimestamp();
     await sendLog(channel.guild, client, embed);
+    client.auditLog.logAction('channel_delete', {
+      guildId: channel.guild.id,
+      details: { channelName: channel.name, channelId: channel.id, deletedBy: executor ? executor.tag : 'Unknown' },
+    });
   },
 };

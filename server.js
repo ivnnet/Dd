@@ -17,6 +17,8 @@ const OWNER_IDS = ['894158323040022548', '1329357514827104266'];
 const VISITOR_IDS = (process.env.VISITOR_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
 const LOGO_URL = process.env.LOGO_URL || 'https://i.ibb.co/Cp40w5YY/icon-1.png';
 let GUILD_NAME = 'the server';
+const auditLog = require('./handlers/auditLog');
+const db = require('./handlers/database');
 
 const app = express();
 const DISCORD_API = 'https://discord.com/api/v10';
@@ -164,24 +166,29 @@ app.get('/api/me', isAuthenticated, (req, res) => {
   });
 });
 
-app.get('/api/strikes/:userId', isAuthenticated, isAdmin, (req, res) => {
+app.get('/api/strikes/:userId', isAuthenticated, isAdmin, async (req, res) => {
   const strikes = require('./handlers/strikes');
-  const data = strikes.getStrikes(req.params.userId, config.guildId);
+  const data = await strikes.getStrikes(req.params.userId, config.guildId);
   res.json(data.map(s => ({ ...s, privateReason: s.privateReason || '' })));
 });
 
-app.get('/api/strikes', isAuthenticated, isAdmin, (req, res) => {
+app.get('/api/strikes', isAuthenticated, isAdmin, async (req, res) => {
   const strikes = require('./handlers/strikes');
-  res.json(strikes.getAllStrikes().map(s => ({ ...s, privateReason: s.privateReason || '' })));
+  const data = await strikes.getAllStrikes(config.guildId);
+  res.json(data.map(s => ({ ...s, privateReason: s.privateReason || '' })));
 });
 
-app.post('/api/strikes', isAuthenticated, isAdmin, restrictMutation, (req, res) => {
+app.post('/api/strikes', isAuthenticated, isAdmin, restrictMutation, async (req, res) => {
   const { userId, publicReason, privateReason } = req.body;
   if (!userId || !publicReason) {
     return res.status(400).json({ error: 'userId and publicReason are required.' });
   }
   const strikes = require('./handlers/strikes');
-  const id = strikes.addStrike(userId, config.guildId, req.user.id, publicReason, privateReason || '');
+  const id = await strikes.addStrike(userId, config.guildId, req.user.id, publicReason, privateReason || '');
+  auditLog.logAction('strike', {
+    userId, guildId: config.guildId, moderatorId: req.user.id, reason: publicReason,
+    details: { privateReason, strikeId: id, source: 'web' },
+  });
   res.json({ strikeId: id });
 });
 
@@ -309,6 +316,42 @@ app.post('/api/modmail/tickets/:channelId/reply', isAuthenticated, isAdmin, rest
 
 app.post('/api/modmail/tickets/:channelId/close', isAuthenticated, isAdmin, restrictMutation, async (req, res) => {
   try {
+    let userId = null;
+    try {
+      const modmail = require('./handlers/modmail');
+      const ticket = modmail.getTicketByChannel(req.params.channelId);
+      if (ticket) userId = ticket.userId;
+      if (!userId) {
+        const msgs = await discordApi(`/channels/${req.params.channelId}/messages?limit=20`);
+        for (const msg of msgs) {
+          if (msg.embeds && msg.embeds[0] && msg.embeds[0].description) {
+            const match = msg.embeds[0].description.match(/\((\d{17,})\)/);
+            if (match) { userId = match[1]; break; }
+          }
+        }
+      }
+      if (userId && db.isReady()) {
+        const allMsgs = await discordApi(`/channels/${req.params.channelId}/messages?limit=100`);
+        const Transcript = require('./models/Transcript');
+        const transcript = new Transcript({
+          ticketId: req.params.channelId,
+          userId: userId,
+          userTag: `<@${userId}>`,
+          channelId: req.params.channelId,
+          channelName: `ticket-${userId}`,
+          messages: allMsgs.reverse().map(m => ({
+            role: m.author.bot ? 'assistant' : 'user',
+            content: m.content || (m.embeds?.[0]?.description || '(no content)'),
+            timestamp: m.timestamp,
+          })),
+        });
+        await transcript.save();
+        auditLog.logAction('ticket_closed', {
+          userId, guildId: config.guildId, moderatorId: req.user.id,
+          details: { channelId: req.params.channelId, transcriptId: transcript._id.toString(), source: 'web' },
+        });
+      }
+    } catch {}
     const closeEmbed = {
       embeds: [{
         color: 0xe74c3c,
@@ -418,6 +461,7 @@ app.get('/api/actions/kick', isAuthenticated, isAdmin, restrictMutation, async (
       try { await discordApi(`/channels/${logChannelId}/messages`, { method: 'POST', body: JSON.stringify(logEmbed) }); } catch {}
     }
     sendUserDM(userId, dmEmbed);
+    auditLog.logAction('kick', { userId, guildId: config.guildId, moderatorId: req.user.id, reason: reason || '', details: { source: 'web' } });
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -457,6 +501,7 @@ app.get('/api/actions/ban', isAuthenticated, isAdmin, restrictMutation, async (r
       try { await discordApi(`/channels/${logChannelId}/messages`, { method: 'POST', body: JSON.stringify(logEmbed) }); } catch {}
     }
     sendUserDM(userId, dmEmbed);
+    auditLog.logAction('ban', { userId, guildId: config.guildId, moderatorId: req.user.id, reason: reason || '', details: { deleteDays: deleteDays || 0, source: 'web' } });
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -494,6 +539,7 @@ app.get('/api/actions/unban', isAuthenticated, isAdmin, restrictMutation, async 
       try { await discordApi(`/channels/${logChannelId}/messages`, { method: 'POST', body: JSON.stringify(logEmbed) }); } catch {}
     }
     sendUserDM(userId, dmEmbed);
+    auditLog.logAction('unban', { userId, guildId: config.guildId, moderatorId: req.user.id, reason: reason || '', details: { source: 'web' } });
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -539,6 +585,7 @@ app.get('/api/actions/mute', isAuthenticated, isAdmin, restrictMutation, async (
       try { await discordApi(`/channels/${logChannelId}/messages`, { method: 'POST', body: JSON.stringify(logEmbed) }); } catch {}
     }
     sendUserDM(userId, dmEmbed);
+    auditLog.logAction('mute', { userId, guildId: config.guildId, moderatorId: req.user.id, reason: reason || '', details: { duration, source: 'web' } });
     res.json({ success: true, until: communicationDisabledUntil });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -577,6 +624,7 @@ app.get('/api/actions/unmute', isAuthenticated, isAdmin, restrictMutation, async
       try { await discordApi(`/channels/${logChannelId}/messages`, { method: 'POST', body: JSON.stringify(logEmbed) }); } catch {}
     }
     sendUserDM(userId, dmEmbed);
+    auditLog.logAction('unmute', { userId, guildId: config.guildId, moderatorId: req.user.id, reason: reason || '', details: { source: 'web' } });
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -602,7 +650,7 @@ app.get('/api/actions/strike', isAuthenticated, isAdmin, restrictMutation, async
     const { userId, publicReason, privateReason } = req.query;
     if (!userId || !publicReason) return res.status(400).json({ error: 'userId and publicReason are required.' });
     const strikes = require('./handlers/strikes');
-    const strikeId = strikes.addStrike(userId, config.guildId, req.user.id, publicReason, privateReason || '');
+    const strikeId = await strikes.addStrike(userId, config.guildId, req.user.id, publicReason, privateReason || '');
     const dmEmbed = {
       color: 0xe74c3c,
       title: `Strike #${strikeId} Issued`,
@@ -633,6 +681,7 @@ app.get('/api/actions/strike', isAuthenticated, isAdmin, restrictMutation, async
       } catch {}
     }
     sendUserDM(userId, dmEmbed);
+    auditLog.logAction('strike', { userId, guildId: config.guildId, moderatorId: req.user.id, reason: publicReason, details: { privateReason, strikeId, source: 'web' } });
     res.json({ success: true, strikeId });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -676,6 +725,37 @@ app.post('/api/admin/kill-session', isAuthenticated, isAdmin, (req, res) => {
     });
   } else {
     res.json({ success: true, note: 'MemoryStore does not support enumeration. Session will expire naturally.' });
+  }
+});
+
+app.get('/api/audit', isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    const { userId, action, limit } = req.query;
+    let logs;
+    if (userId) {
+      logs = await auditLog.getAuditLogsByUser(config.guildId, userId);
+    } else {
+      logs = await auditLog.getAuditLogs(config.guildId, {});
+    }
+    if (action) logs = logs.filter(l => l.action === action);
+    if (limit) logs = logs.slice(0, parseInt(limit));
+    res.json(logs);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/transcripts/:id', isAuthenticated, isAdmin, async (req, res) => {
+  try {
+    const Transcript = require('./models/Transcript');
+    const transcript = await Transcript.findById(req.params.id).lean();
+    if (!transcript) return res.status(404).send('Transcript not found');
+    const lines = transcript.messages.map(m =>
+      `[${new Date(m.timestamp).toLocaleString()}] ${m.role === 'user' ? transcript.userTag : 'Staff'}: ${m.content}`
+    ).join('\n');
+    res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Ticket Transcript - ${transcript.channelName}</title><style>body{font-family:monospace;background:#1a1a2e;color:#e0e0e0;padding:20px;max-width:800px;margin:auto}pre{white-space:pre-wrap}.header{border-bottom:1px solid #333;padding-bottom:10px;margin-bottom:20px}.user{color:#9b59b6}.staff{color:#2ecc71}.meta{color:#888;font-size:12px}</style></head><body><div class="header"><h2>Ticket Transcript</h2><div class="meta">User: ${transcript.userTag} | Channel: ${transcript.channelName} | Closed: ${new Date(transcript.closedAt).toLocaleString()}</div></div><pre>${lines}</pre></body></html>`);
+  } catch (err) {
+    res.status(500).send('Error loading transcript');
   }
 });
 
