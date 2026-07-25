@@ -89,8 +89,13 @@ async function isAdmin(req, res, next) {
 
   try {
     const channelId = '1529409393584504983';
+    let member;
+    try {
+      member = await discordApi(`/guilds/${config.guildId}/members/${req.user.id}`);
+    } catch {
+      return res.status(403).json({ error: 'You are not a member of this server.' });
+    }
     const channel = await discordApi(`/channels/${channelId}`);
-    const member = await discordApi(`/guilds/${config.guildId}/members/${req.user.id}`);
     const roles = await discordApi(`/guilds/${config.guildId}/roles`);
 
     let permissions = BigInt(0);
@@ -364,8 +369,11 @@ app.get('/api/actions/kick', isAuthenticated, isAdmin, restrictMutation, async (
   try {
     const { userId, reason } = req.query;
     if (!userId) return res.status(400).json({ error: 'userId is required.' });
-    const member = await discordApi(`/guilds/${config.guildId}/members/${userId}`);
-    if (!member) return res.status(404).json({ error: 'User not in server.' });
+    try {
+      await discordApi(`/guilds/${config.guildId}/members/${userId}`);
+    } catch {
+      return res.status(404).json({ error: 'User not in server.' });
+    }
     const logEmbed = {
       embeds: [{
         color: 0xe74c3c,
