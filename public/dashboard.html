@@ -31,7 +31,8 @@ async function init() {
   const me = await fetchAPI('/api/me');
   if (!me) return;
   CURRENT_USER = me;
-  renderDashboard(me);
+  const cfg = await fetchAPI('/api/config');
+  renderDashboard(me, cfg);
 }
 
 function renderLogin() {
@@ -59,11 +60,12 @@ function renderForbidden(msg) {
 function isVisitor() { return CURRENT_USER && CURRENT_USER.isVisitor; }
 function isOwner() { return CURRENT_USER && CURRENT_USER.isOwner; }
 
-function renderDashboard(me) {
+function renderDashboard(me, cfg) {
   const avatar = me.avatar
     ? `https://cdn.discordapp.com/avatars/${me.id}/${me.avatar}.png`
     : `https://cdn.discordapp.com/embed/avatars/${me.id % 5}.png`;
 
+  const dbBanner = cfg && !cfg.dbReady ? '<div class="visitor-banner" style="background:#3a1a1a;border-color:#6a2d2d;color:#d59595">Database not connected — audit logs, strikes, and transcripts are unavailable</div>' : '';
   const visitorBanner = isVisitor() ? `<div class="visitor-banner">View-Only Mode — You cannot perform mutations</div>` : '';
 
   document.getElementById('app').innerHTML = `
@@ -78,7 +80,7 @@ function renderDashboard(me) {
         <a href="/auth/logout" class="btn btn-small btn-danger">Logout</a>
       </div>
     </nav>
-    ${visitorBanner}
+    ${dbBanner}${visitorBanner}
     <div class="container">
       <div class="tabs">
         <button class="tab active" data-tab="strikes">Strikes</button>
@@ -658,32 +660,53 @@ async function searchAudit() {
   if (userId) url += '&userId=' + encodeURIComponent(userId);
   if (action) url += '&action=' + encodeURIComponent(action);
 
-  const data = await fetchAPI(url);
-  if (!data) return;
-
-  if (data.length === 0) {
-    el.innerHTML = '<p style="color:#9d9daf">No audit log entries found.</p>';
+  let data;
+  try {
+    const res = await fetch(url);
+    if (res.status === 401) { renderLogin(); return; }
+    if (res.status === 403) { const d = await res.json().catch(() => ({})); renderForbidden(d.error); return; }
+    if (res.status === 500) { const d = await res.json().catch(() => ({})); el.innerHTML = '<div class="alert alert-error">Server error: ' + (d.error || 'Unknown') + '</div>'; return; }
+    data = await res.json();
+    if (!data) { el.innerHTML = '<div class="alert alert-error">Invalid response from server.</div>'; return; }
+  } catch (err) {
+    el.innerHTML = '<div class="alert alert-error">Network error: ' + err.message + '</div>';
     return;
   }
 
-  const rows = data.map(e => {
+  const entries = data.logs || data;
+  const dbReady = data.dbReady !== undefined ? data.dbReady : true;
+
+  if (!Array.isArray(entries) || entries.length === 0) {
+    let msg = 'No audit log entries found.';
+    if (!dbReady) msg += ' <strong>Database is not connected.</strong> Audit logs are not being recorded.';
+    el.innerHTML = '<p style="color:#9d9daf">' + msg + '</p>';
+    return;
+  }
+
+  let html = '';
+  entries.forEach(e => {
     const time = new Date(e.timestamp).toLocaleString();
-    const details = e.details ? Object.entries(e.details).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join(', ') : '';
-    const transcriptLink = e.details?.transcriptUrl ? ` <a href="${e.details.transcriptUrl}" target="_blank" class="btn btn-small btn-primary">View Transcript</a>` : '';
-    return `<tr>
+    let detailsStr = '';
+    if (e.details) {
+      try {
+        detailsStr = Object.entries(e.details).filter(([k]) => k !== 'transcriptUrl').map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`).join(', ');
+      } catch {}
+    }
+    const transcriptLink = e.details?.transcriptUrl ? ` <a href="${e.details.transcriptUrl}" target="_blank" class="btn btn-small btn-primary">View</a>` : '';
+    html += `<tr>
       <td>${time}</td>
       <td><span class="mode-${e.action}">${e.action}</span></td>
       <td>${e.userTag || e.userId || '-'}</td>
       <td>${e.moderatorTag || e.moderatorId || '-'}</td>
       <td>${e.reason || '-'}</td>
-      <td style="font-size:11px;color:#9d9daf">${details}${transcriptLink}</td>
+      <td style="font-size:11px;color:#9d9daf">${detailsStr}${transcriptLink}</td>
     </tr>`;
-  }).join('');
+  });
 
   el.innerHTML = `<div class="table-wrap"><table><thead><tr>
     <th>Time</th><th>Action</th><th>User</th><th>Moderator</th><th>Reason</th><th>Details</th>
-  </tr></thead><tbody>${rows}</tbody></table></div>
-  <p style="color:#9d9daf;margin-top:8px">Showing ${data.length} entries</p>`;
+  </tr></thead><tbody>${html}</tbody></table></div>
+  <p style="color:#9d9daf;margin-top:8px">Showing ${entries.length} entries${!dbReady ? ' &middot; <strong style="color:#d59595">Database offline</strong>' : ''}</p>`;
 }
 
 async function loadTranscripts() {

@@ -161,7 +161,7 @@ app.get('/auth/logout', (req, res) => {
 });
 
 app.get('/api/config', (req, res) => {
-  res.json({ logoUrl: LOGO_URL });
+  res.json({ logoUrl: LOGO_URL, dbReady: db.isReady() });
 });
 
 app.get('/api/me', isAuthenticated, (req, res) => {
@@ -1016,9 +1016,9 @@ app.get('/api/audit', isAuthenticated, isAdmin, async (req, res) => {
     }
     if (action) logs = logs.filter(l => l.action === action);
     if (limit) logs = logs.slice(0, parseInt(limit));
-    res.json(logs);
+    res.json({ logs, dbReady: db.isReady() });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: err.message, dbReady: db.isReady() });
   }
 });
 
