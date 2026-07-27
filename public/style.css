@@ -53,6 +53,7 @@ body {
   cursor: pointer;
   font-size: 14px;
   font-weight: 500;
+  white-space: nowrap;
   transition: background 0.2s;
 }
 
@@ -171,6 +172,7 @@ th {
   text-transform: uppercase;
   font-size: 12px;
   letter-spacing: 0.3px;
+  white-space: nowrap;
 }
 
 td {
@@ -532,6 +534,10 @@ tr:hover td {
   }
   th, td {
     padding: 6px 8px;
+  }
+  td:has(.btn), th:has(.btn) {
+    white-space: nowrap;
+    width: 1%;
   }
   .msg {
     max-width: 100%;
