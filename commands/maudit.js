@@ -35,10 +35,10 @@ module.exports = {
       let count = 0;
 
       for (const [date, entries] of Object.entries(grouped)) {
-        if (count >= 25) break;
+        if (count >= 50) break;
         description += `**${date}**\n`;
         for (const entry of entries) {
-          if (count >= 25) break;
+          if (count >= 50) break;
           const time = new Date(entry.timestamp).toLocaleTimeString();
           const modTag = entry.moderatorTag ? ` by ${entry.moderatorTag}` : '';
           description += `\`${time}\` **${entry.action}**${modTag} — ${entry.reason || entry.details?.reason || 'No reason'}\n`;
